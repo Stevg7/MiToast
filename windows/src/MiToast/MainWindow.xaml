@@ -1,0 +1,115 @@
+<Window x:Class="MiToast.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="clr-namespace:MiToast.UI"
+        mc:Ignorable="d"
+        Title="MiToast"
+        Width="0" Height="0"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        SourceInitialized="Window_SourceInitialized">
+    <Window.Resources>
+        <!-- 托盘右键菜单（WPF 自绘，圆角+阴影+悬停高亮，支持深色） -->
+        <ContextMenu x:Key="TrayContextMenu" Opened="TrayMenu_Opened">
+            <ContextMenu.Resources>
+                <SolidColorBrush x:Key="TrayMenuBgBrush" Color="White"/>
+                <SolidColorBrush x:Key="TrayMenuBorderBrush" Color="#FFE5E5EA"/>
+                <SolidColorBrush x:Key="TrayTextBrush" Color="#FF1D1D1F"/>
+                <SolidColorBrush x:Key="TraySeparatorBrush" Color="#FFE5E5EA"/>
+
+                <Style TargetType="ContextMenu">
+                    <Setter Property="OverridesDefaultStyle" Value="True"/>
+                    <Setter Property="HasDropShadow" Value="False"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ContextMenu">
+                                <Border Margin="8"
+                                        Background="{DynamicResource TrayMenuBgBrush}"
+                                        BorderBrush="{DynamicResource TrayMenuBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="12"
+                                        Padding="6">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" BlurRadius="24" ShadowDepth="4" Opacity="0.18"/>
+                                    </Border.Effect>
+                                    <StackPanel IsItemsHost="True"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <Style TargetType="MenuItem">
+                    <Setter Property="Foreground" Value="{DynamicResource TrayTextBrush}"/>
+                    <Setter Property="FontSize" Value="13"/>
+                    <Setter Property="Cursor" Value="Hand"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="MenuItem">
+                                <Border x:Name="Bd"
+                                        Background="Transparent"
+                                        CornerRadius="8"
+                                        Padding="14,9"
+                                        Margin="2">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="18"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="CheckMark" Grid.Column="0"
+                                                   Text="&#x2713;"
+                                                   FontWeight="Bold"
+                                                   FontSize="13"
+                                                   Foreground="#FFFF6900"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="Collapsed"/>
+                                        <ContentPresenter Grid.Column="1"
+                                                          ContentSource="Header"
+                                                          VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsChecked" Value="True">
+                                        <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                    </Trigger>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="#22FF6900"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <Style TargetType="Separator">
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Separator">
+                                <Border Height="1" Margin="14,5"
+                                        Background="{DynamicResource TraySeparatorBrush}"/>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ContextMenu.Resources>
+
+            <MenuItem Header="设置..." Click="TraySettings_Click"/>
+            <MenuItem Header="历史通知..." Click="TrayHistory_Click"/>
+            <Separator/>
+            <MenuItem Tag="dark" Header="深色模式" IsCheckable="True" Click="TrayDark_Click"/>
+            <MenuItem Tag="musicpin" Header="音乐通知常驻" IsCheckable="True" Click="TrayMusicPin_Click"/>
+            <MenuItem Tag="dnd" Header="勿扰模式（PC 端静默）" IsCheckable="True" Click="TrayDnd_Click"/>
+            <Separator/>
+            <MenuItem Header="退出 MiToast" Click="TrayExit_Click"/>
+        </ContextMenu>
+    </Window.Resources>
+
+    <Grid x:Name="NotificationHost"
+          ClipToBounds="False"/>
+</Window>

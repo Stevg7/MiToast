@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MiToast</string>
+    <string name="accessibility_service_desc">MiToast 保活服务，通过无障碍权限检测并自动拉起转发服务和通知监听，确保通知稳定同步到电脑。</string>
+</resources>

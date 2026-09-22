@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 24/25 回退图标：橙底圆角方块 + 白色铃铛 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#FF6900"
+        android:pathData="M10,0 L38,0 C43.5,0 48,4.5 48,10 L48,38 C48,43.5 43.5,48 38,48 L10,48 C4.5,48 0,43.5 0,38 L0,10 C0,4.5 4.5,0 10,0 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,13
+            C20.7,13 18,15.7 18,19
+            L18,24.8
+            C18,25.9 17.6,27 16.9,28
+            L15.5,30
+            L32.5,30
+            L31.1,28
+            C30.4,27 30,25.9 30,24.8
+            L30,19
+            C30,15.7 27.3,13 24,13 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M21.2,32
+            C21.2,33.5 22.5,34.8 24,34.8
+            C25.5,34.8 26.8,33.5 26.8,32 Z" />
+</vector>

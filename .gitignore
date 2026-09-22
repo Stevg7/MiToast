@@ -1,0 +1,32 @@
+# ===== Android / Gradle =====
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+android/app/release/
+
+# ===== Windows / .NET (WPF) =====
+windows/src/**/bin/
+windows/src/**/obj/
+windows/dist/
+windows/*.zip
+*.user
+*.suo
+*.pdb
+*.cache
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vs/
+.vscode/

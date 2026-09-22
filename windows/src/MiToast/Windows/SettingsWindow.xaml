@@ -1,0 +1,526 @@
+<Window x:Class="MiToast.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MiToast 设置"
+        Height="720"
+        Width="520"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanMinimize"
+        Background="{DynamicResource PageBgBrush}">
+    <Window.Resources>
+        <!-- 主题色板（ApplyTheme 中切换 Color，DynamicResource 实时生效） -->
+        <SolidColorBrush x:Key="PageBgBrush" Color="#FFF0F0F2"/>
+        <SolidColorBrush x:Key="CardBgBrush" Color="White"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1D1D1F"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF86868B"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#FFD1D1D6"/>
+        <SolidColorBrush x:Key="TrackBrush" Color="#FFE5E5EA"/>
+        <SolidColorBrush x:Key="HoverBrush" Color="#FFF5F5F7"/>
+        <SolidColorBrush x:Key="ComboBgBrush" Color="White"/>
+
+        <!-- 卡片分区样式 -->
+        <Style x:Key="SectionCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Padding" Value="22,18"/>
+            <Setter Property="Margin" Value="0,0,0,14"/>
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,14"/>
+            <Setter Property="Typography.Capitals" Value="AllSmallCaps"/>
+        </Style>
+        <Style x:Key="ItemLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="ItemHint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+        </Style>
+
+        <!-- ToggleSwitch 自定义开关样式 -->
+        <Style x:Key="ToggleSwitch" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent" MinHeight="28">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <!-- 轨道 -->
+                            <Border x:Name="Track"
+                                    Grid.Column="0"
+                                    Width="46" Height="28"
+                                    CornerRadius="14"
+                                    Background="{DynamicResource TrackBrush}"
+                                    Padding="2">
+                                <!-- Thumb -->
+                                <Border x:Name="Thumb"
+                                        Width="24" Height="24"
+                                        CornerRadius="12"
+                                        Background="White"
+                                        HorizontalAlignment="Left">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform x:Name="ThumbTranslate" X="0"/>
+                                    </Border.RenderTransform>
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" BlurRadius="6" ShadowDepth="0" Opacity="0.15"/>
+                                    </Border.Effect>
+                                </Border>
+                            </Border>
+                            <ContentPresenter Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Track" Property="Background" Value="#FF34C759"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ThumbTranslate"
+                                                            Storyboard.TargetProperty="X"
+                                                            To="18"
+                                                            Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ThumbTranslate"
+                                                            Storyboard.TargetProperty="X"
+                                                            To="0"
+                                                            Duration="0:0:0.15">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 现代化 ComboBox：圆角边框 + 自定义下拉面板 -->
+        <Style x:Key="ModernComboBox" TargetType="ComboBox">
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="Toggle"
+                                          Focusable="False" ClickMode="Press"
+                                          Foreground="{DynamicResource TextPrimaryBrush}"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="ComboBg"
+                                                Background="{DynamicResource ComboBgBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                CornerRadius="10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="36"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter Grid.Column="0" Margin="14,0,0,0"
+                                                                  VerticalAlignment="Center"
+                                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                                                <Path Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      Data="M0,0 L8,0 L4,5 Z" Fill="#FF86868B"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ComboBg" Property="BorderBrush" Value="#FFFF6900"/>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="ComboBg" Property="BorderBrush" Value="#FFFF6900"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="Popup" Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True" Focusable="False"
+                                   PopupAnimation="Slide" Margin="0,4,0,0">
+                                <Border Background="{DynamicResource ComboBgBrush}" CornerRadius="12"
+                                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        Padding="4">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="4" Opacity="0.12"/>
+                                    </Border.Effect>
+                                    <ScrollViewer MaxHeight="260">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModernComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBg" Background="Transparent" CornerRadius="8"
+                                Padding="12,9" Margin="0,1">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBg" Property="Background" Value="{DynamicResource HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBg" Property="Background" Value="#22FF6900"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 现代化 Slider：圆角轨道 + 圆形滑块 -->
+        <Style x:Key="ModernSlider" TargetType="Slider">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid VerticalAlignment="Center">
+                            <Border Height="6" CornerRadius="3" Background="{DynamicResource TrackBrush}"/>
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="6" CornerRadius="3"
+                                                        Background="#FFFF6900"
+                                                        HorizontalAlignment="Stretch"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Background="Transparent"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid Width="22" Height="22">
+                                                    <Border CornerRadius="11" Background="White">
+                                                        <Border.Effect>
+                                                            <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="1" Opacity="0.2"/>
+                                                        </Border.Effect>
+                                                    </Border>
+                                                    <Border Width="10" Height="10" CornerRadius="5"
+                                                            Background="#FFFF6900"
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 现代化主按钮（橙色） -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="28,0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#FFFF6900"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBg" CornerRadius="10"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBg" Property="Background" Value="#FFE55E00"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BtnBg" Property="Background" Value="#FFCC5400"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 现代化次按钮（浅底描边） -->
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="20,0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ComboBgBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBg" CornerRadius="10"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBg" Property="Background" Value="{DynamicResource HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BtnBg" Property="Background" Value="{DynamicResource TrackBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- 触摸屏适配：PanningMode 非 None 才会响应手指拖动滚动；关闭长按/划动手势避免打断滑动；点击仍由触摸提升为鼠标事件正常响应 -->
+    <ScrollViewer PanningMode="VerticalOnly" PanningDeceleration="0.0015" Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28,24">
+            <!-- 标题区 -->
+            <TextBlock Text="设置"
+                       FontSize="28"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"/>
+            <TextBlock Text="调整通知窗口在电脑上的显示方式"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Margin="0,4,0,22"/>
+
+            <!-- 显示位置 -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="显示位置" Style="{StaticResource SectionTitle}"/>
+                    <ComboBox x:Name="PositionCombo"
+                              Style="{StaticResource ModernComboBox}"
+                              ItemContainerStyle="{StaticResource ModernComboBoxItem}"
+                              SelectedIndex="0">
+                        <ComboBoxItem Content="屏幕右上角" Tag="TopRight"/>
+                        <ComboBoxItem Content="屏幕右下角" Tag="BottomRight"/>
+                        <ComboBoxItem Content="屏幕左上角" Tag="TopLeft"/>
+                        <ComboBoxItem Content="屏幕左下角" Tag="BottomLeft"/>
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+
+            <!-- 外观 -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="外观" Style="{StaticResource SectionTitle}"/>
+
+                    <Grid Margin="0,0,0,18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="深色模式" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="将通知卡片与窗口切换为深色背景，立即生效" Style="{StaticResource ItemHint}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="DarkModeCheck"
+                                  Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  Checked="DarkModeCheck_Toggled"
+                                  Unchecked="DarkModeCheck_Toggled"/>
+                    </Grid>
+
+                    <TextBlock x:Name="WidthLabel"
+                               Text="卡片宽度：480 px"
+                               Style="{StaticResource ItemLabel}"
+                               Margin="0,0,0,8"/>
+                    <Slider x:Name="WidthSlider"
+                            Style="{StaticResource ModernSlider}"
+                            Minimum="320"
+                            Maximum="640"
+                            Value="480"
+                            TickFrequency="10"
+                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                            ValueChanged="WidthSlider_ValueChanged"/>
+
+                    <TextBlock x:Name="MarginLabel"
+                               Text="屏幕边距：40 px"
+                               Style="{StaticResource ItemLabel}"
+                               Margin="0,18,0,8"/>
+                    <Slider x:Name="MarginSlider"
+                            Style="{StaticResource ModernSlider}"
+                            Minimum="8"
+                            Maximum="120"
+                            Value="40"
+                            TickFrequency="2"
+                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                            ValueChanged="MarginSlider_ValueChanged"/>
+
+                    <TextBlock x:Name="GapLabel"
+                               Text="卡片间距：3 px"
+                               Style="{StaticResource ItemLabel}"
+                               Margin="0,18,0,8"/>
+                    <Slider x:Name="GapSlider"
+                            Style="{StaticResource ModernSlider}"
+                            Minimum="0"
+                            Maximum="24"
+                            Value="3"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                            ValueChanged="GapSlider_ValueChanged"/>
+
+                    <TextBlock x:Name="DensityLabel"
+                               Text="卡片紧凑度：标准"
+                               Style="{StaticResource ItemLabel}"
+                               Margin="0,18,0,8"/>
+                    <Slider x:Name="DensitySlider"
+                            Style="{StaticResource ModernSlider}"
+                            Minimum="75"
+                            Maximum="125"
+                            Value="100"
+                            TickFrequency="5"
+                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                            ValueChanged="DensitySlider_ValueChanged"/>
+                    <TextBlock Text="紧凑卡片更矮更省空间，宽松卡片更透气"
+                               Style="{StaticResource ItemHint}"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 音乐 -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="音乐" Style="{StaticResource SectionTitle}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="音乐通知常驻" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="音乐卡片始终置顶显示，暂停播放后也不会自动消失" Style="{StaticResource ItemHint}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="MusicPersistentCheck"
+                                  Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="True"
+                                  Checked="MusicPersistentCheck_Toggled"
+                                  Unchecked="MusicPersistentCheck_Toggled"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 勿扰模式 -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="勿扰模式" Style="{StaticResource SectionTitle}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="勿扰模式" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="开启后通知仍会保存到历史但不弹出" Style="{StaticResource ItemHint}"/>
+                        </StackPanel>
+                        <ComboBox x:Name="DndModeCombo"
+                                  Grid.Column="1"
+                                  Style="{StaticResource ModernComboBox}"
+                                  ItemContainerStyle="{StaticResource ModernComboBoxItem}"
+                                  Width="170"
+                                  SelectedIndex="0">
+                            <ComboBoxItem Content="关闭" Tag="off"/>
+                            <ComboBoxItem Content="PC 端静默" Tag="pc"/>
+                            <ComboBoxItem Content="同步手机勿扰" Tag="sync"/>
+                        </ComboBox>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 历史 -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="历史记录" Style="{StaticResource SectionTitle}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="保存历史通知" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="在电脑上保存最近 500 条通知" Style="{StaticResource ItemHint}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="HistoryCheck"
+                                  Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="True"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 底部按钮区 -->
+            <Grid Margin="0,8,0,8">
+                <Button x:Name="HistoryButton"
+                        Content="查看历史通知"
+                        Style="{StaticResource SecondaryButton}"
+                        HorizontalAlignment="Left"
+                        Click="HistoryButton_Click"/>
+                <Button x:Name="SaveButton"
+                        Content="保存并应用"
+                        Style="{StaticResource PrimaryButton}"
+                        HorizontalAlignment="Right"
+                        Click="SaveButton_Click"/>
+                <TextBlock x:Name="SavedHint"
+                           Text="&#x2713; 已应用"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="#FF34C759"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Visibility="Collapsed"/>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

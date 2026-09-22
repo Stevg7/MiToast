@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标前景：白色通知铃铛，位于 108dp 画布的 72dp 安全区内 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30
+            C47.4,30 42,35.4 42,42
+            L42,53.5
+            C42,55.8 41.2,58.1 39.8,60
+            L37,64
+            L71,64
+            L68.2,60
+            C66.8,58.1 66,55.8 66,53.5
+            L66,42
+            C66,35.4 60.6,30 54,30 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48.5,68
+            C48.5,71 51,73.5 54,73.5
+            C57,73.5 59.5,71 59.5,68 Z" />
+</vector>
