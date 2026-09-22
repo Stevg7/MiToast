@@ -108,7 +108,14 @@ cd android
 
 技术栈：Kotlin 1.9.22、AGP 8.5.2、Jetpack Compose（BOM 2024.02.00）、Java-WebSocket 1.5.4、Shizuku 13.1.5，`compileSdk 34` / `minSdk 24`。
 
-> **注意**：`android/gradle.properties` 中有一行 `org.gradle.java.home=...`，指向本项目开发机上的 JDK 路径。换到别的机器构建时，请把它改成你本机的 JDK 路径，或删掉这一行改用 `JAVA_HOME` 环境变量。
+> **关于 JDK 配置**：`gradlew` 启动脚本本身也需要一个 JDK —— 在启动 Gradle 之前就要能读到 `JAVA_HOME` 或 PATH 上的 `java`，否则会直接报 `ERROR: JAVA_HOME is not set`。如果本机默认 JDK 比 21 新（Gradle 8.7 不支持），可在**用户级**配置文件里固定构建用的 JDK，这样不必往仓库里塞机器相关路径：
+>
+> ```properties
+> # ~/.gradle/gradle.properties  （Windows: C:\Users\<你>\.gradle\gradle.properties）
+> org.gradle.java.home=C:/path/to/jdk-17-or-21
+> ```
+>
+> 找不到 `java` 时，命令行构建还需临时指定：`JAVA_HOME=/path/to/jdk ./gradlew :app:assembleDebug`（用 Android Studio 构建则无需此步，IDE 会自带 JDK）。
 
 ### Windows 端
 
