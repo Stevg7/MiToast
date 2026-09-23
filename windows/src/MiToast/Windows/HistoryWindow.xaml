@@ -4,105 +4,15 @@
         Title="历史通知"
         Height="640"
         Width="800"
+        MinWidth="560"
+        MinHeight="420"
         WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI"
         Background="{DynamicResource PageBgBrush}">
-    <Window.Resources>
-        <!-- 主题色板（与设置窗口一致，ApplyTheme 动态切换） -->
-        <SolidColorBrush x:Key="PageBgBrush" Color="#FFF0F0F2"/>
-        <SolidColorBrush x:Key="CardBgBrush" Color="White"/>
-        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FF1D1D1F"/>
-        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FF86868B"/>
-        <SolidColorBrush x:Key="TextTertiaryBrush" Color="#FF6E6E73"/>
-        <SolidColorBrush x:Key="BorderBrush" Color="#FFD1D1D6"/>
-        <SolidColorBrush x:Key="HoverBrush" Color="#FFF5F5F7"/>
-        <SolidColorBrush x:Key="FieldBgBrush" Color="White"/>
 
-        <!-- 圆角搜索框 -->
-        <Style x:Key="SearchBoxStyle" TargetType="TextBox">
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-            <Setter Property="CaretBrush" Value="#FFFF6900"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="Bd"
-                                Background="{DynamicResource FieldBgBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="10">
-                            <ScrollViewer x:Name="PART_ContentHost"
-                                          Margin="14,0"
-                                          VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#FFFF6900"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+    <!-- 主题色板与控件样式统一定义在 App.xaml，本窗口 ApplyTheme 按深浅色替换色板实例 -->
 
-        <!-- 危险操作按钮（清空） -->
-        <Style x:Key="DangerButton" TargetType="Button">
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="Padding" Value="20,0"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Foreground" Value="#FFFF3B30"/>
-            <Setter Property="Background" Value="{DynamicResource FieldBgBrush}"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="BtnBg" CornerRadius="10"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="BtnBg" Property="Background" Value="#22FF3B30"/>
-                                <Setter TargetName="BtnBg" Property="BorderBrush" Value="#FFFF3B30"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- 复制小按钮（橙色文字） -->
-        <Style x:Key="CopyButton" TargetType="Button">
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Padding" Value="14,0"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="#FFFF6900"/>
-            <Setter Property="Background" Value="#1AFF6900"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="BtnBg" CornerRadius="8"
-                                Background="{TemplateBinding Background}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="BtnBg" Property="Background" Value="#33FF6900"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="24,20">
+    <Grid Margin="28,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -111,10 +21,14 @@
         <!-- 标题 + 工具行 -->
         <StackPanel Margin="0,0,0,16">
             <TextBlock Text="历史通知"
-                       FontSize="26"
+                       FontSize="28"
                        FontWeight="Bold"
                        Foreground="{DynamicResource TextPrimaryBrush}"/>
-            <Grid Margin="0,14,0,0">
+            <TextBlock Text="查看手机同步到电脑的通知记录"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Margin="0,4,0,14"/>
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="260"/>
                     <ColumnDefinition Width="Auto"/>
@@ -123,7 +37,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="SearchBox"
                          Grid.Column="0"
-                         Style="{StaticResource SearchBoxStyle}"
+                         Style="{StaticResource ModernTextBox}"
                          TextChanged="SearchBox_TextChanged"/>
                 <Button Grid.Column="1"
                         Content="清空历史"
@@ -159,8 +73,10 @@
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <Border Background="{DynamicResource CardBgBrush}"
-                            CornerRadius="14"
-                            Padding="16,12"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="18,14"
                             Margin="0,0,10,10">
                         <Grid>
                             <Grid.ColumnDefinitions>

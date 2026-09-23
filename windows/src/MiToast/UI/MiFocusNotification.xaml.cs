@@ -38,11 +38,6 @@ public partial class MiFocusNotification : UserControl
     private static readonly Brush OrangeBrushStatic =
         new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFF6900"));
 
-    // 妙播设备面板
-    private bool _castExpanded;
-    private List<CastDevice> _castDevices = new();
-    private CastDevicesMessage? _castMsg;
-
     public MiFocusNotification(NotificationMessage message)
     {
         InitializeComponent();
@@ -51,13 +46,8 @@ public partial class MiFocusNotification : UserControl
         {
             LoadData();
             PlayShowAnimation();
-            NetworkManager.Instance.CastDevicesUpdated += OnCastDevicesUpdated;
         };
-        Unloaded += (_, _) =>
-        {
-            StopMediaTick();
-            NetworkManager.Instance.CastDevicesUpdated -= OnCastDevicesUpdated;
-        };
+        Unloaded += (_, _) => StopMediaTick();
     }
 
     public int CalculateHeight()
@@ -87,18 +77,6 @@ public partial class MiFocusNotification : UserControl
         {
             // 外边距12 + 面板内边距(10+10) + 控制行40 + 间距10 + 进度行16
             h += 12 + 10 + 40 + 10 + 16 + 10;
-            if (CastDevicePanel.Visibility == Visibility.Visible)
-            {
-                // 面板顶距12 + 每行40 + 行距6；无设备时的提示行约22
-                h += 12;
-                h += _castDevices.Count > 0 ? _castDevices.Count * 46.0 : 22;
-                // 小米妙播投射中状态行（与设备行同高）
-                if (_castMsg is { MiplayCasting: true } or { CarCasting: true }) h += 46;
-                // 一键妙播入口行（未投射且手机端无障碍可反向控制）
-                if (_castMsg is { MiplayCasting: false, CarCasting: false, MiplaySupported: true, MiplayControllable: true }) h += 46;
-                // 底部妙播设备引导提示（两行小字）
-                if (_castMsg?.MiplaySupported == true) h += 34;
-            }
         }
         return (int)Math.Ceiling(h + BaseVerticalPadding * 2 * density);
     }
@@ -236,8 +214,6 @@ public partial class MiFocusNotification : UserControl
         if (actions == null || actions.Count == 0)
         {
             MediaPanel.Visibility = Visibility.Collapsed;
-            CastHeaderBtn.Visibility = Visibility.Collapsed;
-            CollapseCastPanel();
             _mediaSignature = null;
             StopMediaTick();
             return;
@@ -284,7 +260,6 @@ public partial class MiFocusNotification : UserControl
         MediaPlayPauseGlyph.Text = Message.MediaIsPlaying ? "\u23F8" : "\u25B6";
 
         MediaPanel.Visibility = Visibility.Visible;
-        CastHeaderBtn.Visibility = Visibility.Visible;
         UpdateMediaProgress();
     }
 
@@ -342,223 +317,6 @@ public partial class MiFocusNotification : UserControl
         MediaLyricBtn.Foreground = _lyricActive ? OrangeBrushStatic : _themePrimaryBrush;
         LyricCheckBadge.Visibility = _lyricActive ? Visibility.Visible : Visibility.Collapsed;
     }
-
-    // ---------- 妙播 / 设备流转 ----------
-
-    private void CastHeaderBtn_Click(object sender, RoutedEventArgs e)
-    {
-        if (_castExpanded) CollapseCastPanel();
-        else ExpandCastPanel();
-    }
-
-    private void ExpandCastPanel()
-    {
-        _castExpanded = true;
-        CastDevicePanel.Visibility = Visibility.Visible;
-        CastHeaderBtn.Foreground = OrangeBrushStatic;
-        BuildCastDevices();
-        // 主动请求一次最新设备列表（Android 端随后会推送 cast_devices）
-        _ = NetworkManager.Instance.RequestCastDevices();
-    }
-
-    private void CollapseCastPanel()
-    {
-        _castExpanded = false;
-        if (CastDevicePanel != null) CastDevicePanel.Visibility = Visibility.Collapsed;
-        if (CastHeaderBtn != null) CastHeaderBtn.Foreground = _themePrimaryBrush;
-    }
-
-    private void OnCastDevicesUpdated(object? sender, CastDevicesMessage msg)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            _castMsg = msg;
-            _castDevices = msg.Devices ?? new List<CastDevice>();
-            if (_castExpanded)
-            {
-                // 面板内容/高度变化后 WPF SizeChanged 会驱动宿主 RecalculateOffsets 自动重排
-                BuildCastDevices();
-            }
-        });
-    }
-
-    /// <summary>构建妙播设备行：本机/蓝牙/投屏/音箱，当前选中设备高亮，点击即流转。</summary>
-    private void BuildCastDevices()
-    {
-        CastDevicePanel.Children.Clear();
-
-        if (_castDevices.Count == 0)
-        {
-            var hint = new TextBlock
-            {
-                Text = "正在搜索可投放设备…",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(AppSettings.Instance.DarkMode
-                    ? Color.FromRgb(0x98, 0x98, 0x9F)
-                    : Color.FromRgb(0x86, 0x86, 0x8B)),
-                Margin = new Thickness(6, 4, 0, 6),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            CastDevicePanel.Children.Add(hint);
-            return;
-        }
-
-        bool dark = AppSettings.Instance.DarkMode;
-        Brush selectedBg = dark
-            ? new SolidColorBrush(Colors.White)
-            : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFF6900"));
-        Brush selectedFg = dark
-            ? new SolidColorBrush(Color.FromRgb(0x1D, 0x1D, 0x1F))
-            : new SolidColorBrush(Colors.White);
-        Brush normalBg = dark
-            ? new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x3C))
-            : new SolidColorBrush(Colors.White);
-        Brush normalFg = dark
-            ? new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF7))
-            : new SolidColorBrush(Color.FromRgb(0x1D, 0x1D, 0x1F));
-        Brush hintFg = new SolidColorBrush(dark
-            ? Color.FromRgb(0x98, 0x98, 0x9F)
-            : Color.FromRgb(0x86, 0x86, 0x8B));
-
-        bool miplayCasting = _castMsg?.MiplayCasting == true || _castMsg?.CarCasting == true;
-
-        // 小米妙播投射中：顶部显示状态行（小爱音箱/电视等走私有 MiLink 协议，不在标准设备列表中）
-        if (miplayCasting)
-        {
-            string castingText = _castMsg?.CarCasting == true
-                ? "正在车机上播放（小米妙播）"
-                : "正在小米妙播设备上播放";
-            CastDevicePanel.Children.Add(BuildCastRow(
-                CastDeviceGlyph("speaker"), castingText, selectedBg, selectedFg, clickable: false, selected: true));
-        }
-
-        foreach (var device in _castDevices)
-        {
-            // 妙播投放到私有协议设备期间，音频实际不在标准路由上，标准行不显示选中
-            bool selected = device.Selected && !miplayCasting;
-            var row = BuildCastRow(
-                CastDeviceGlyph(device.DeviceType), device.Name,
-                selected ? selectedBg : normalBg,
-                selected ? selectedFg : normalFg,
-                clickable: true, selected: selected);
-            row.Tag = device.Id;
-            string routeId = device.Id;
-            // 妙播期间点「本机」= 让手机端自动操作妙播选择器切回本机（标准 MediaRouter 对妙播无效）
-            bool switchBackLocal = miplayCasting && device.DeviceType == "phone";
-            row.Click += (_, _) =>
-            {
-                if (switchBackLocal)
-                {
-                    _ = NetworkManager.Instance.SendMiPlaySwitch("local");
-                    return;
-                }
-                _ = NetworkManager.Instance.SendCastTransfer(routeId);
-                // 乐观更新选中态，Android 端推送新列表后会校正
-                foreach (var d in _castDevices) d.Selected = false;
-                var target = _castDevices.FirstOrDefault(d => d.Id == routeId);
-                if (target != null) target.Selected = true;
-                BuildCastDevices();
-            };
-            CastDevicePanel.Children.Add(row);
-        }
-
-        // 未在妙播且可反向控制（手机端无障碍可用）：提供一键妙播到音箱/电视的入口
-        if (!miplayCasting && _castMsg?.MiplayControllable == true)
-        {
-            var miplayRow = BuildCastRow(
-                CastDeviceGlyph("speaker"), "妙播到小爱音箱 / 小米电视…",
-                normalBg, normalFg, clickable: true, selected: false);
-            miplayRow.Click += (_, _) =>
-            {
-                _ = NetworkManager.Instance.SendMiPlaySwitch("device");
-            };
-            CastDevicePanel.Children.Add(miplayRow);
-        }
-
-        // HyperOS 小米妙播生态提示：小爱音箱/小米电视等 Wi-Fi 设备不走标准路由
-        if (_castMsg?.MiplaySupported == true)
-        {
-            string hint = _castMsg.MiplayControllable
-                ? "小爱音箱、小米电视等可点上面的行直接切换，也可在手机控制中心「小米妙播」中选择"
-                : "小爱音箱、小米电视等妙播设备，请在手机控制中心的「小米妙播」中选择（开启无障碍后可在此直接切换）";
-            var miplayHint = new TextBlock
-            {
-                Text = hint,
-                FontSize = 11,
-                Foreground = hintFg,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(8, 8, 8, 2),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            CastDevicePanel.Children.Add(miplayHint);
-        }
-    }
-
-    /// <summary>构建一行妙播设备/状态行（clickable=false 时仅展示，无点击效果）。</summary>
-    private Button BuildCastRow(string glyph, string text, Brush bg, Brush fg, bool clickable, bool selected)
-    {
-        var row = new Button
-        {
-            Style = (Style)FindResource("CastRowButton"),
-            Background = bg,
-            Foreground = fg,
-            // 状态行不响应点击（IsEnabled=false 会让样式变灰，故用 IsHitTestVisible）
-            IsHitTestVisible = clickable
-        };
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var icon = new TextBlock
-        {
-            Text = glyph,
-            FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol"),
-            FontSize = 16,
-            Foreground = fg,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(icon, 0);
-
-        var name = new TextBlock
-        {
-            Text = text,
-            FontSize = 13,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = fg,
-            Margin = new Thickness(12, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        Grid.SetColumn(name, 1);
-
-        var check = new TextBlock
-        {
-            Text = "\u2713",
-            FontSize = 12,
-            FontWeight = FontWeights.Bold,
-            Foreground = fg,
-            VerticalAlignment = VerticalAlignment.Center,
-            Visibility = selected ? Visibility.Visible : Visibility.Collapsed
-        };
-        Grid.SetColumn(check, 2);
-
-        grid.Children.Add(icon);
-        grid.Children.Add(name);
-        grid.Children.Add(check);
-        row.Content = grid;
-        return row;
-    }
-
-    /// <summary>妙播设备类型 → Segoe MDL2 Assets 图标字形。</summary>
-    private static string CastDeviceGlyph(string deviceType) => deviceType switch
-    {
-        "phone" => "\uE8EA",   // CellPhone
-        "tv" => "\uE7F4",      // TVMonitor
-        "bt" or "speaker" => "\uE767", // Volume/扬声器
-        _ => "\uE767"
-    };
 
     /// <summary>根据消息中的 MediaSession 进度初始化进度条，并启动/停止本地走时计时器。</summary>
     private void UpdateMediaProgress()
@@ -665,9 +423,6 @@ public partial class MiFocusNotification : UserControl
         // 按钮文字色（通过按钮 Foreground + TemplateBinding 传递到模板内 TextBlock）
         OpenAppButton.Foreground = new SolidColorBrush(secondary);
         CloseButton.Foreground = new SolidColorBrush(secondary);
-        CastHeaderBtn.Foreground = _castExpanded
-            ? OrangeBrushStatic
-            : new SolidColorBrush(primary);
 
         _themePrimaryBrush = new SolidColorBrush(primary);
 
@@ -687,9 +442,6 @@ public partial class MiFocusNotification : UserControl
                 b.Foreground = mediaBrush;
             }
             UpdateMediaToggleStates();
-
-            // 妙播面板已展开时按新主题重建设备行配色
-            if (_castExpanded) BuildCastDevices();
         }
     }
 

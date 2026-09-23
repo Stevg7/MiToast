@@ -24,6 +24,8 @@ public partial class HistoryWindow : Window
             AppSettings.Instance.Changed -= OnSettingsChanged;
             if (_open == this) _open = null;
         };
+        // 窗口句柄创建后补一次主题应用：Mica/圆角/深色标题栏都依赖 hwnd
+        SourceInitialized += (_, _) => ApplyTheme(AppSettings.Instance.DarkMode);
         ApplyTheme(AppSettings.Instance.DarkMode);
         Reload();
     }
@@ -36,13 +38,15 @@ public partial class HistoryWindow : Window
     /// <summary>切换窗口主题色板（DynamicResource 实时刷新）。</summary>
     private void ApplyTheme(bool dark)
     {
-        SetBrush("PageBgBrush", dark ? Color.FromRgb(0x1C, 0x1C, 0x1E) : Color.FromRgb(0xF0, 0xF0, 0xF2));
+        // UWP 风格窗口外观：圆角 + 沉浸式深色标题栏 + Fluent 渐变页面背景
+        FluentWindow.ApplyChrome(this, dark);
+        Resources["PageBgBrush"] = FluentWindow.CreatePageBrush(dark);
         SetBrush("CardBgBrush", dark ? Color.FromRgb(0x2C, 0x2C, 0x2E) : Colors.White);
         SetBrush("TextPrimaryBrush", dark ? Color.FromRgb(0xF5, 0xF5, 0xF7) : Color.FromRgb(0x1D, 0x1D, 0x1F));
         SetBrush("TextSecondaryBrush", dark ? Color.FromRgb(0x98, 0x98, 0x9F) : Color.FromRgb(0x86, 0x86, 0x8B));
         SetBrush("TextTertiaryBrush", dark ? Color.FromRgb(0x98, 0x98, 0x9F) : Color.FromRgb(0x6E, 0x6E, 0x73));
-        SetBrush("BorderBrush", dark ? Color.FromRgb(0x48, 0x48, 0x4A) : Color.FromRgb(0xD1, 0xD1, 0xD6));
-        SetBrush("HoverBrush", dark ? Color.FromRgb(0x3A, 0x3A, 0x3C) : Color.FromRgb(0xF5, 0xF5, 0xF7));
+        SetBrush("BorderBrush", dark ? Color.FromRgb(0x48, 0x48, 0x4A) : Color.FromRgb(0xE5, 0xE5, 0xE5));
+        SetBrush("HoverBrush", dark ? Color.FromRgb(0x3A, 0x3A, 0x3C) : Color.FromRgb(0xF5, 0xF5, 0xF5));
         SetBrush("FieldBgBrush", dark ? Color.FromRgb(0x2C, 0x2C, 0x2E) : Colors.White);
     }
 
@@ -52,9 +56,18 @@ public partial class HistoryWindow : Window
         Resources[key] = new SolidColorBrush(color);
     }
 
-    /// <summary>打开历史窗口；若已打开则激活已有窗口。</summary>
-    public static void ShowSingleton()
+    /// <summary>
+    /// 打开历史窗口；若已打开则激活已有窗口。
+    /// 访问受系统身份验证（Windows Hello PIN 等）保护：未解锁或解锁超时先弹系统验证，
+    /// 验证通过才打开；取消验证则不打开。
+    /// </summary>
+    public static async void ShowSingleton()
     {
+        if (!await HistoryLock.EnsureUnlockedAsync())
+        {
+            return;
+        }
+
         if (_open != null)
         {
             if (_open.WindowState == WindowState.Minimized)
@@ -169,11 +182,20 @@ public class HistoryItem
 
         Code = MiFocusNotification.ExtractVerificationCode(message);
 
+        // 分类取值见安卓端 NotificationCategory，新增取值需同步这里与 MCP 工具说明
         CategoryText = message.Category switch
         {
             "delivery" => "外卖配送",
             "pickup" => "到店取餐",
+            "order" => "订单物流",
             "chat" => "消息",
+            "music" => "音乐播放",
+            "payment" => "支付",
+            "verification" => "验证码",
+            "promo" => "推广推荐",
+            "system" => "系统",
+            "schedule" => "日程",
+            "progress" => "进度",
             _ => string.Empty
         };
     }

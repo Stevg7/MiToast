@@ -99,6 +99,9 @@
                 </Style>
             </ContextMenu.Resources>
 
+            <MenuItem Tag="status" Header="正在搜索设备..." IsEnabled="False"/>
+            <MenuItem Tag="rescan" Header="重新搜索设备" Click="TrayRescan_Click"/>
+            <Separator/>
             <MenuItem Header="设置..." Click="TraySettings_Click"/>
             <MenuItem Header="历史通知..." Click="TrayHistory_Click"/>
             <Separator/>

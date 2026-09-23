@@ -30,6 +30,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         NetworkManager.Instance.NotificationReceived += OnNotificationReceived;
         NetworkManager.Instance.NotificationCleared += OnNotificationCleared;
+        NetworkManager.Instance.StatusChanged += OnConnectionStatusChanged;
+        NetworkManager.Instance.HintRequested += OnConnectionHint;
         Loaded += MainWindow_Loaded;
         AppSettings.Instance.Changed += (_, _) => Dispatcher.Invoke(ApplySettings);
     }
@@ -47,6 +49,46 @@ public partial class MainWindow : Window
         ApplySettings();
         InitializeTrayIcon();
         StartFullscreenWatcher();
+        UpdateTrayStatus();
+    }
+
+    // ---------- 连接状态展示 ----------
+
+    /// <summary>
+    /// 托盘提示与托盘菜单里的状态行。连不上手机时这是用户唯一能看到的信息来源，
+    /// 否则程序只会安静地一条通知都不弹。
+    /// </summary>
+    private void UpdateTrayStatus()
+    {
+        if (_trayIcon == null) return;
+
+        var manager = NetworkManager.Instance;
+        string status = manager.StatusText;
+
+        // NotifyIcon.Text 有 63 字符上限，超了会抛异常
+        const int maxTooltip = 63;
+        string tooltip = $"MiToast 通知同步\n{status}";
+        _trayIcon.Text = tooltip.Length > maxTooltip ? tooltip[..maxTooltip] : tooltip;
+
+        if (FindResource("TrayContextMenu") is ContextMenu menu
+            && FindMenuItem(menu, "status") is { } statusItem)
+        {
+            statusItem.Header = status;
+        }
+    }
+
+    private void OnConnectionStatusChanged(object? sender, string status) => Dispatcher.Invoke(UpdateTrayStatus);
+
+    /// <summary>长时间连不上手机时弹一次气泡提示（校园网屏蔽广播等场景下的引导）。</summary>
+    private void OnConnectionHint(object? sender, string hint)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (_trayIcon == null) return;
+            _trayIcon.BalloonTipTitle = "MiToast 没找到手机";
+            _trayIcon.BalloonTipText = hint;
+            _trayIcon.ShowBalloonTip(10000);
+        });
     }
 
     /// <summary>
@@ -177,7 +219,7 @@ public partial class MainWindow : Window
         // 卡片自身 Loaded 回调里会执行 LoadData（展开内容面板、确定真实高度），
         // 其后再重排偏移，避免按折叠高度堆叠导致卡片重叠。
         notification.Loaded += (_, _) => RecalculateOffsets();
-        // 妙播设备列表展开/折叠会改变卡片实际高度，需同步重排与命中区域。
+        // 卡片内容变化（媒体进度行展开/折叠、文案行数变化等）会改变卡片实际高度，需同步重排与命中区域。
         notification.SizeChanged += (_, _) => RecalculateOffsets();
 
         NotificationHost.Children.Add(notification);
@@ -692,6 +734,8 @@ public partial class MainWindow : Window
             pinItem.IsChecked = Settings.MusicPersistent;
         if (FindMenuItem(menu, "dnd") is { } dndItem)
             dndItem.IsChecked = Settings.DndMode == "pc";
+        if (FindMenuItem(menu, "status") is { } statusItem)
+            statusItem.Header = NetworkManager.Instance.StatusText;
     }
 
     /// <summary>托盘菜单配色随深色模式切换。</summary>
@@ -720,6 +764,13 @@ public partial class MainWindow : Window
 
     private void TraySettings_Click(object sender, RoutedEventArgs e)
         => SettingsWindow.ShowSingleton();
+
+    /// <summary>立刻重新搜索手机（放弃当前退避等待，掐断现有连接重连）。</summary>
+    private void TrayRescan_Click(object sender, RoutedEventArgs e)
+    {
+        NetworkManager.Instance.Reconnect();
+        UpdateTrayStatus();
+    }
 
     private void TrayHistory_Click(object sender, RoutedEventArgs e)
         => HistoryWindow.ShowSingleton();
