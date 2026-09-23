@@ -20,6 +20,8 @@ class MiToastApp : Application() {
         super.onCreate()
         instance = this
         NetworkManager.init(this)
+        // 本地历史通知存储（离线期间记录，电脑端重连后增量同步）
+        com.mitoast.history.HistoryStore.init(this)
         // 妙播：启动 MediaRouter2 路由扫描（API 30+ 生效，低版本自动降级）
         try {
             com.mitoast.media.CastRouteManager.init(this)

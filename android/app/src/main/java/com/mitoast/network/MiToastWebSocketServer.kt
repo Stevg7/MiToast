@@ -10,12 +10,13 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
-class MiToastWebSocketServer(port: Int) : org.java_websocket.server.WebSocketServer(
+class MiToastWebSocketServer(port: Int, private val authToken: String) : org.java_websocket.server.WebSocketServer(
     java.net.InetSocketAddress(port)
 ) {
 
     companion object {
         private const val TAG = "MiToastWS"
+        private const val AUTH_TIMEOUT_MS = 10_000L
         val json = kotlinx.serialization.json.Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
@@ -24,6 +25,9 @@ class MiToastWebSocketServer(port: Int) : org.java_websocket.server.WebSocketSer
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val connectedClients = java.util.concurrent.CopyOnWriteArrayList<org.java_websocket.WebSocket>()
+
+    /** 已完成配对码认证的客户端。 */
+    private val authedClients = java.util.concurrent.ConcurrentHashMap<org.java_websocket.WebSocket, Boolean>()
 
     /**
      * 端口是否已成功绑定。绑定失败（BindException）时服务线程会永久退出，
@@ -38,6 +42,15 @@ class MiToastWebSocketServer(port: Int) : org.java_websocket.server.WebSocketSer
         connectedClients.add(conn)
         Log.d(TAG, "Client connected: ${conn.remoteSocketAddress}")
 
+        // 接入认证：连接建立后 10 秒内必须发来正确配对码，否则掐断
+        scope.launch {
+            kotlinx.coroutines.delay(AUTH_TIMEOUT_MS)
+            if (!authedClients.containsKey(conn)) {
+                Log.w(TAG, "Client auth timeout, closing: ${conn.remoteSocketAddress}")
+                try { conn.close(4001, "auth required") } catch (_: Exception) {}
+            }
+        }
+
         val ping = com.mitoast.model.PingMessage(
             deviceName = android.os.Build.MODEL,
             deviceModel = android.os.Build.MODEL
@@ -48,14 +61,34 @@ class MiToastWebSocketServer(port: Int) : org.java_websocket.server.WebSocketSer
     override fun onClose(conn: org.java_websocket.WebSocket?, code: Int, reason: String?, remote: Boolean) {
         conn ?: return
         connectedClients.remove(conn)
-        Log.d(TAG, "Client disconnected: ${conn.remoteSocketAddress}")
+        authedClients.remove(conn)
+        Log.d(TAG, "Client disconnected: ${conn.remoteSocketAddress} code=$code reason=$reason")
     }
 
     override fun onMessage(conn: org.java_websocket.WebSocket?, message: String?) {
         message ?: return
-        Log.d(TAG, "Received from ${conn?.remoteSocketAddress}: $message")
+        conn ?: return
+        Log.d(TAG, "Received from ${conn.remoteSocketAddress}: $message")
         try {
             val obj = kotlinx.serialization.json.Json.parseToJsonElement(message).jsonObject
+
+            // 未认证连接：只接受配对码消息，其余一律拒绝
+            if (!authedClients.containsKey(conn)) {
+                if (obj["type"]?.jsonPrimitive?.contentOrNull == "auth" &&
+                    com.mitoast.security.PairToken.matches(
+                        com.mitoast.MiToastApp.instance,
+                        obj["token"]?.jsonPrimitive?.contentOrNull
+                    )
+                ) {
+                    authedClients[conn] = true
+                    Log.i(TAG, "Client authenticated: ${conn.remoteSocketAddress}")
+                } else {
+                    Log.w(TAG, "Client auth failed, closing: ${conn.remoteSocketAddress}")
+                    try { conn.close(4001, "auth required") } catch (_: Exception) {}
+                }
+                return
+            }
+
             when (obj["type"]?.jsonPrimitive?.contentOrNull) {
                 "open_app" -> {
                     val pkg = obj["packageName"]?.jsonPrimitive?.contentOrNull ?: return
@@ -92,6 +125,20 @@ class MiToastWebSocketServer(port: Int) : org.java_websocket.server.WebSocketSer
                             kotlinx.coroutines.delay(1200)
                             broadcastPayload(json.encodeToString(buildCastDevicesMessage()))
                         }
+                    }
+                }
+                "history_sync_request" -> {
+                    // Windows 端请求同步离线期间的通知历史：
+                    // since 为 Windows 端历史最新时间戳，按时间升序返回最多 2000 条，
+                    // Windows 端满批次会继续用新游标请求下一批，直至追平。
+                    val since = obj["since"]?.jsonPrimitive?.longOrNull ?: 0L
+                    Log.d(TAG, "history_sync_request since=$since")
+                    try {
+                        val entries = com.mitoast.history.HistoryStore.entriesSince(since, 2000)
+                        Log.i(TAG, "history_sync -> ${entries.size} entries since=$since")
+                        conn?.send(json.encodeToString(com.mitoast.model.HistorySyncMessage(notifications = entries)))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "history_sync send failed", e)
                     }
                 }
             }

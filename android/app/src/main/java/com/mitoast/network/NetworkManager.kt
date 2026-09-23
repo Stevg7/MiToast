@@ -30,6 +30,9 @@ object NetworkManager {
 
     private lateinit var appContext: android.content.Context
 
+    /** 电脑端接入配对码（WS 服务创建时使用）。 */
+    private var authToken: String = ""
+
     private var notificationListenerConnected = false
 
     @Volatile
@@ -52,6 +55,7 @@ object NetworkManager {
         if (initialized) return
         initialized = true
         appContext = context.applicationContext
+        authToken = com.mitoast.security.PairToken.get(appContext)
         discoveryService = DiscoveryService(WS_PORT)
         // 妙播设备上下线时主动推送给已连接的 PC
         com.mitoast.media.CastRouteManager.routesChangedListener = {
@@ -72,10 +76,10 @@ object NetworkManager {
         }
     }
 
-    /** 创建并启动一个新的 WS 服务端实例 */
+    /** 创建并启动一个新的 WS 服务端实例（带配对码接入认证） */
     private fun startWsServer() {
         try {
-            wsServer = MiToastWebSocketServer(WS_PORT).also { it.start() }
+            wsServer = MiToastWebSocketServer(WS_PORT, authToken).also { it.start() }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start WS server", e)
         }

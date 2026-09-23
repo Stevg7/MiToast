@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,6 +46,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +68,7 @@ import com.mitoast.prefs.AppWhitelistManager
 import com.mitoast.shizuku.ShizukuHelper
 import com.mitoast.ui.AppSelectActivity
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // ---------- 品牌配色 ----------
 val BrandOrange = Color(0xFFFF6900)
@@ -145,6 +148,11 @@ private fun MainScreen() {
     val context = LocalContext.current
     var state by remember { mutableStateOf(readUiState(context)) }
 
+    // 服务重启进度：独立于 state 轮询，避免轮询刷新把进度状态覆盖掉
+    val scope = rememberCoroutineScope()
+    var restarting by remember { mutableStateOf(false) }
+    var restartStage by remember { mutableStateOf("") }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -156,8 +164,11 @@ private fun MainScreen() {
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         while (true) {
-            state = readUiState(context)
-            delay(2000)
+            // 仅在界面可见时刷新；重启过程中加快轮询，让状态行及时跟上服务变化
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                state = readUiState(context)
+            }
+            delay(if (restarting) 400 else 2000)
         }
     }
 
@@ -167,6 +178,63 @@ private fun MainScreen() {
 
     // Shizuku 授权回调在 binder 线程，需切回主线程刷新 Compose 状态
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+
+    /**
+     * 重启/启动网络同步服务：先停掉旧实例，再启动并等待就绪，
+     * 全程通过 restartStage 展示阶段进度（正在停止 → 正在启动 → 完成/失败）。
+     */
+    fun restartSyncService() {
+        if (restarting) return
+        scope.launch {
+            restarting = true
+            val wasRunning = NetworkManager.isRunning
+            restartStage = if (wasRunning) "正在停止服务…" else "正在启动服务…"
+
+            if (wasRunning) {
+                context.stopService(Intent(context, NetworkService::class.java))
+                // 等待 onDestroy → NetworkManager.stop() 真正退出
+                var waited = 0L
+                while (NetworkManager.isRunning && waited < 3000) {
+                    delay(200)
+                    waited += 200
+                }
+            }
+
+            restartStage = "正在启动服务…"
+            try {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, NetworkService::class.java)
+                )
+            } catch (e: Exception) {
+                restartStage = "启动失败：${e.message ?: "系统拒绝了前台服务启动"}"
+                state = readUiState(context)
+                // 与完成提示一致，失败原因短暂停留后再收起
+                delay(1600)
+                restarting = false
+                state = readUiState(context)
+                return@launch
+            }
+
+            // 等待服务就绪（WebSocket 端口绑定完成），最多等 6 秒
+            var waited = 0L
+            while (!NetworkManager.isRunning && waited < 6000) {
+                delay(300)
+                waited += 300
+            }
+
+            restartStage = if (NetworkManager.isRunning) {
+                if (wasRunning) "重启完成" else "启动完成"
+            } else {
+                "启动失败，请检查服务状态后重试"
+            }
+            state = readUiState(context)
+            // 完成提示短暂停留后再收起进度条
+            delay(1200)
+            restarting = false
+            state = readUiState(context)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -207,7 +275,15 @@ private fun MainScreen() {
                 },
                 state.listenerConnected
             )
-            StatusRow("网络同步服务", if (state.netRunning) "运行中" else "未运行", state.netRunning)
+            StatusRow(
+                "网络同步服务",
+                when {
+                    restarting -> "重启中…"
+                    state.netRunning -> "运行中"
+                    else -> "未运行"
+                },
+                state.netRunning && !restarting
+            )
             StatusRow(
                 "无障碍保活",
                 if (state.accessibilityEnabled) "运行中" else "未开启",
@@ -217,6 +293,8 @@ private fun MainScreen() {
                 StatusRow("手机地址", state.ip.ifEmpty { "获取中…" }, state.ip.isNotEmpty(), showDot = false)
                 StatusRow("已连接电脑", "${state.clients} 台", state.clients > 0, showDot = false)
             }
+            // 电脑端接入配对码：在电脑端设置「连接 → 配对码」里填入，手机只接受配对码正确的连接
+            StatusRow("配对码", com.mitoast.security.PairToken.get(context), true, showDot = false)
         }
 
         SectionHeader("权限设置")
@@ -343,19 +421,34 @@ private fun MainScreen() {
                     Text("开启局域网 WebSocket 与设备发现", fontSize = 13.sp, color = TextGray)
                 }
                 Button(
-                    onClick = {
-                        ContextCompat.startForegroundService(
-                            context,
-                            Intent(context, NetworkService::class.java)
-                        )
-                    },
+                    onClick = { restartSyncService() },
+                    enabled = !restarting,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = BrandOrange,
                         contentColor = Color.White
                     )
                 ) {
-                    Text(if (state.netRunning) "重启服务" else "启动服务")
+                    Text(
+                        when {
+                            restarting -> "重启中…"
+                            state.netRunning -> "重启服务"
+                            else -> "启动服务"
+                        }
+                    )
                 }
+            }
+            if (restarting) {
+                Spacer(modifier = Modifier.height(14.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = BrandOrange,
+                    trackColor = DividerColor
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(restartStage, fontSize = 12.sp, color = TextGray)
             }
         }
 

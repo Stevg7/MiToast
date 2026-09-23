@@ -89,3 +89,10 @@ data class ClearNotificationMessage(
     val type: String = "clear",
     val key: String
 )
+
+/** 手机端响应 Windows 历史同步请求的消息（离线期间的通知增量）。 */
+@Serializable
+data class HistorySyncMessage(
+    val type: String = "history_sync",
+    val notifications: List<NotificationMessage> = emptyList()
+)

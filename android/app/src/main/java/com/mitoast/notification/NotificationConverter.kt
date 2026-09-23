@@ -16,43 +16,6 @@ import java.util.regex.Pattern
 
 object NotificationConverter {
 
-    private val DELIVERY_PACKAGES = setOf(
-        "com.sankuai.meituan", "com.meituan",
-        "com.ele.me", "com.eleme",
-        "com.mcdonalds.app", "com.mcdonalds",
-        "com.yumc.kfc", "com.yumc.pizza",
-        "com.kfc.mobile",
-        "com.starbucks.cn", "com.starbucks",
-        "com.burgerking", "com.burgerking.cn",
-        "com.dicos", "com.dangdang.buy",
-        "com.xunmeng.pinduoduo",
-        "com.suning.mobile.ebuy",
-        "com.jingdong.app.mall", "com.jingdong.mobile",
-        "com.tencent.wework"
-    )
-
-    private val DELIVERY_KEYWORDS = listOf(
-        "外卖", "配送", "骑手", "派送", "送达",
-        "快递", "物流", "包裹", "顺丰", "京东",
-        "已发货", "已签收", "订单已", "您的订单"
-    )
-
-    private val PICKUP_KEYWORDS = listOf(
-        "取餐码", "取餐号", "取餐柜", "取餐码", "取餐",
-        "到店自提", "门店自提", "自提", "到店",
-        "已准备好", "制作完成", "可领取", "已出炉", "已制作",
-        "请到店", "请前往", "堂食"
-    )
-
-    private val PROGRESS_PACKAGES = setOf(
-        "com.tencent.mm",
-        "com.tencent.mobileqq",
-        "com.netease.cloudmusic",
-        "com.tencent.qqmusic",
-        "com.kugou.android",
-        "com.tencent.wework"
-    )
-
     private val PICKUP_CODE_PATTERNS = listOf(
         Pattern.compile("取餐码[：: ]*([A-Za-z0-9\\-]+)"),
         Pattern.compile("取餐号[：: ]*([A-Za-z0-9\\-]+)"),
@@ -77,7 +40,23 @@ object NotificationConverter {
 
         val ticker = n.tickerText?.toString().orEmpty()
         val stableKey = buildStableKey(sbn)
-        val category = detectCategory(sbn.packageName, title, text, bigText, subText)
+
+        // 媒体信息要先取：带播放会话/媒体控件的通知属于媒体类，分类需要这个信号
+        val mediaActions = extractMediaActions(n)
+        val mediaInfo = if (mediaActions != null) extractMediaInfo(extras) else null
+
+        val category = NotificationCategory.classify(
+            NotificationCategory.Input(
+                packageName = sbn.packageName,
+                title = title,
+                text = text,
+                bigText = bigText,
+                subText = subText,
+                androidCategory = n.category.orEmpty(),
+                hasMedia = mediaActions != null || mediaInfo != null,
+                hasProgress = extras.containsKey("android.progress")
+            )
+        )
         val progress = buildProgress(category, title, text, bigText, extras)
         val isOngoing = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             sbn.isOngoing || (n.flags and Notification.FLAG_ONGOING_EVENT) != 0
@@ -93,9 +72,6 @@ object NotificationConverter {
         val groupKey = n.group.orEmpty()
 
         val hyperData = tryExtractHyperNotification(extras)
-
-        val mediaActions = extractMediaActions(n)
-        val mediaInfo = if (mediaActions != null) extractMediaInfo(extras) else null
 
         return NotificationMessage(
             id = "${sbn.packageName}_${sbn.id}_${sbn.postTime}",
@@ -178,28 +154,6 @@ object NotificationConverter {
         }
     }
 
-    private fun detectCategory(
-        packageName: String,
-        title: String,
-        text: String,
-        bigText: String,
-        subText: String
-    ): String {
-        if (packageName in PROGRESS_PACKAGES) return "progress"
-
-        val combined = "$title $text $bigText $subText"
-
-        if (PICKUP_KEYWORDS.any { combined.contains(it) } ||
-            (packageName in DELIVERY_PACKAGES && combined.contains("取餐"))) {
-            return "pickup"
-        }
-
-        if (packageName in DELIVERY_PACKAGES) return "delivery"
-        if (DELIVERY_KEYWORDS.any { combined.contains(it) }) return "delivery"
-        if (combined.contains("微信") || combined.contains("新消息")) return "chat"
-        return "general"
-    }
-
     private fun buildProgress(
         category: String,
         title: String,
@@ -208,8 +162,8 @@ object NotificationConverter {
         extras: Bundle
     ): com.mitoast.model.NotificationProgress? {
         return when (category) {
-            "pickup" -> extractPickupProgress(title, text, bigText)
-            "delivery" -> extractDeliveryProgress(title, text, bigText)
+            NotificationCategory.PICKUP -> extractPickupProgress(title, text, bigText)
+            NotificationCategory.DELIVERY -> extractDeliveryProgress(title, text, bigText)
             else -> {
                 if (extras.containsKey("android.progress")) {
                     val current = extras.getInt("android.progress")

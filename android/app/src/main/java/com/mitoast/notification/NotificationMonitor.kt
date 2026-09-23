@@ -127,6 +127,9 @@ class NotificationMonitor : NotificationListenerService() {
         val appName = getAppName(sbn.packageName)
         val message = NotificationConverter.convert(sbn, appName)
 
+        // 本地历史存储：无论电脑是否在线都记录，电脑端重连后增量同步过去
+        com.mitoast.history.HistoryStore.record(message)
+
         // 直接在回调（binder）线程上调用：broadcastNotification 内部会同步获取短时
         // WakeLock 后再异步发送，保证锁屏/Doze 下系统回调持锁释放前我们的锁已拿到，
         // 发送不会因 CPU 休眠被推迟到下一个维护窗口。
