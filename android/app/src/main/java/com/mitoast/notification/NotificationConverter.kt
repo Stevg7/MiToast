@@ -1,10 +1,15 @@
 package com.mitoast.notification
 
 import android.app.Notification
+import android.content.ComponentName
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.media.MediaMetadata
+import android.media.session.MediaSessionManager
 import android.os.Build
+import android.util.Log
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import com.mitoast.MiToastApp
@@ -15,6 +20,8 @@ import java.util.Base64
 import java.util.regex.Pattern
 
 object NotificationConverter {
+
+    private const val TAG = "NotificationConverter"
 
     private val PICKUP_CODE_PATTERNS = listOf(
         Pattern.compile("取餐码[：: ]*([A-Za-z0-9\\-]+)"),
@@ -86,7 +93,15 @@ object NotificationConverter {
             ticker = hyperData?.ticker ?: ticker,
             hintTitle = hyperData?.hintTitle ?: hintTitle,
             hintText = hyperData?.hintText ?: hintText,
-            iconBase64 = extractLargeIconBase64(sbn),
+            // 媒体通知优先取 MediaSession 的专辑封面（通常 512px 以上，远大于通知大图标，
+            // PC 端放大查看不再模糊）；取不到（无会话/包名不匹配）再回退通知大图标；
+            // 非媒体通知维持 128px 小图
+            iconBase64 = if (!mediaActions.isNullOrEmpty()) {
+                extractMediaArtworkBase64(sbn.packageName, maxSide = 512)
+                    ?: extractLargeIconBase64(sbn, maxSide = 320)
+            } else {
+                extractLargeIconBase64(sbn, maxSide = 128)
+            },
             timestamp = sbn.postTime,
             category = category,
             isOngoing = isOngoing,
@@ -389,7 +404,86 @@ object NotificationConverter {
         }
     }
 
-    private fun extractLargeIconBase64(sbn: StatusBarNotification): String {
+    /**
+     * 从 MediaSession 元数据提取专辑封面：通知监听服务本身有权枚举活跃媒体会话，
+     * 按发通知的包名匹配会话后取 METADATA_KEY_ALBUM_ART/ART（原始分辨率通常 512-1024px）。
+     * 照片类封面走 JPEG（比 PNG 小一个量级）；无匹配会话/异常时返回 null，调用方回退大图标。
+     *
+     * 性能护栏（封面提取是大图解码 + JPEG 压缩，单次数百毫秒，DLNA 推流场景下
+     * 高频重发会抢占 CPU 造成播放卡顿）：
+     * 1. 时间窗：同一应用 2.5 秒内重复到站直接复用上次结果，不碰 binder/不解码；
+     * 2. 代次缓存：Bitmap.generationId 未变（同一首歌的重发）时复用已编码的 base64。
+     * 提取耗时与命中情况打日志（NotificationConverter），便于 logcat 监测。
+     */
+    private val artworkCache = HashMap<String, Pair<Int, String>>()
+    private val artworkFetchedAt = HashMap<String, Long>()
+    private const val ARTWORK_REDISPATCH_WINDOW_MS = 2500L
+
+    private fun extractMediaArtworkBase64(packageName: String, maxSide: Int): String? {
+        val started = android.os.SystemClock.elapsedRealtime()
+        synchronized(artworkCache) {
+            val cached = artworkCache[packageName]
+            val fetchedAt = artworkFetchedAt[packageName] ?: 0L
+            if (cached != null && started - fetchedAt < ARTWORK_REDISPATCH_WINDOW_MS) {
+                Log.d(TAG, "artwork time-window hit ($packageName) in 0ms")
+                return cached.second
+            }
+        }
+        return try {
+            val context = MiToastApp.instance
+            val sessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+                ?: return null
+            val listenerComponent = ComponentName(context, NotificationMonitor::class.java)
+            val controller = sessionManager.getActiveSessions(listenerComponent)
+                .firstOrNull { it.packageName == packageName } ?: return null
+            val metadata = controller.metadata ?: return null
+            val art = metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                ?: return null
+
+            val generation = art.generationId
+            synchronized(artworkCache) {
+                artworkCache[packageName]?.takeIf { it.first == generation }?.let {
+                    artworkFetchedAt[packageName] = started
+                    Log.d(TAG, "artwork cache hit ($packageName gen=$generation) in " +
+                            "${android.os.SystemClock.elapsedRealtime() - started}ms")
+                    return it.second
+                }
+            }
+
+            val encoded = encodeBitmapBase64(art, maxSide, preferJpeg = true)
+            synchronized(artworkCache) {
+                artworkCache[packageName] = generation to encoded
+                artworkFetchedAt[packageName] = started
+            }
+            Log.d(TAG, "artwork encoded ($packageName gen=$generation " +
+                    "${art.width}x${art.height}) in ${android.os.SystemClock.elapsedRealtime() - started}ms")
+            encoded
+        } catch (e: Exception) {
+            Log.d(TAG, "artwork extract failed ($packageName) in " +
+                    "${android.os.SystemClock.elapsedRealtime() - started}ms: ${e.message}")
+            null
+        }
+    }
+
+    /** 等比缩到最长边不超过 maxSide（不放大小图）并编码：优先 JPEG（无透明通道时），否则 PNG。 */
+    private fun encodeBitmapBase64(bitmap: Bitmap, maxSide: Int, preferJpeg: Boolean): String {
+        val scale = minOf(maxSide.toFloat() / bitmap.width, maxSide.toFloat() / bitmap.height, 1f)
+        val scaledWidth = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val scaledHeight = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        val scaled = if (scaledWidth == bitmap.width && scaledHeight == bitmap.height) bitmap
+        else Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+
+        val os = ByteArrayOutputStream()
+        if (preferJpeg && !scaled.hasAlpha()) {
+            scaled.compress(Bitmap.CompressFormat.JPEG, 88, os)
+        } else {
+            scaled.compress(Bitmap.CompressFormat.PNG, 75, os)
+        }
+        return Base64.getEncoder().encodeToString(os.toByteArray())
+    }
+
+    private fun extractLargeIconBase64(sbn: StatusBarNotification, maxSide: Int = 128): String {
         return try {
             val context = MiToastApp.instance
             val n = sbn.notification
@@ -403,8 +497,10 @@ object NotificationConverter {
             val width = drawable.intrinsicWidth.coerceAtLeast(1)
             val height = drawable.intrinsicHeight.coerceAtLeast(1)
 
-            val scaledWidth = width.coerceAtMost(128)
-            val scaledHeight = height.coerceAtMost(128)
+            // 等比缩到最长边不超过 maxSide，且不放大小图
+            val scale = minOf(maxSide.toFloat() / width, maxSide.toFloat() / height, 1f)
+            val scaledWidth = (width * scale).toInt().coerceAtLeast(1)
+            val scaledHeight = (height * scale).toInt().coerceAtLeast(1)
 
             val bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(bitmap)

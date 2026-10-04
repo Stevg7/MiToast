@@ -29,6 +29,9 @@ public enum ConnectionState
     Connected
 }
 
+/// <summary>给用户的一次性连接提示（托盘气泡）：标题随失败原因变化，配对码被拒不能说成"没找到手机"。</summary>
+public sealed record ConnectionHint(string Title, string Text);
+
 /// <summary>
 /// 与手机端 WebSocket 服务的连接管理。
 ///
@@ -54,10 +57,24 @@ public class NetworkManager
     private const int KeepAliveIntervalMs = 20000;
     private const int HintAfterMs = 45000;
 
+    /// <summary>认证结算窗口：手机端配对码不对会立刻 close(4001)，等一小会儿再宣布"已连接"。</summary>
+    private const int AuthSettleMs = 500;
+
+    /// <summary>手机端拒绝配对码时的 WebSocket 关闭码（与 MiToastWebSocketServer 一致）。</summary>
+    private const int AuthRejectCloseCode = 4001;
+
+    /// <summary>发 ping 后等 pong 的上限；对方会回 pong 却没等到时判定链路半开。</summary>
+    private const int PongTimeoutMs = 8000;
+
+    /// <summary>认证结算结果。</summary>
+    private const int SettleOk = 0;
+    private const int SettleAuthRejected = 1;
+    private const int SettleLinkLost = 2;
+
     /// <summary>手机端可能下发的消息类型，用于识别"连上的是不是 MiToast"。</summary>
     private static readonly HashSet<string> KnownMessageTypes = new()
     {
-        "ping", "notification", "clear", "dnd_status", "cast_devices", "history_sync"
+        "ping", "pong", "notification", "clear", "dnd_status", "cast_devices", "history_sync"
     };
 
     /// <summary>单次历史同步的最大条数（与手机端一致）；满批次说明手机端可能还有更早的离线记录。</summary>
@@ -76,13 +93,28 @@ public class NetworkManager
     private long _failStreakStart;
     private bool _hintFired;
 
+    /// <summary>本轮失败里出现过配对码被拒：提示要往"配对码不对"上引，不能说"没找到手机"。</summary>
+    private bool _lastFailAuth;
+
+    /// <summary>对端是否会回 pong（新版手机才会）。不会回就不按丢 pong 判死，避免误杀旧版手机。</summary>
+    private volatile bool _pongSeen;
+
+    /// <summary>最近一次收到 pong 的时刻（Environment.TickCount64），0 表示本次连接还没收到过。</summary>
+    private long _lastPongAt;
+
+    /// <summary>连通性探测去重：网络抖动会连发多轮 NetworkAddressChanged。</summary>
+    private int _verifyInFlight;
+
+    /// <summary>同一 WebSocket 上 SendAsync 不可并发（保活、探测、UI 指令、历史续拉会撞车），统一过发送锁。</summary>
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+
     public event EventHandler<NotificationMessage>? NotificationReceived;
     public event EventHandler<string>? NotificationCleared;
     public event EventHandler<string>? StatusChanged;
     public event EventHandler<ConnectionState>? ConnectionStateChanged;
 
-    /// <summary>长时间连不上手机时触发一次，提示用户手动指定地址（校园网广播受限场景）。</summary>
-    public event EventHandler<string>? HintRequested;
+    /// <summary>长时间连不上手机/配对码被拒时触发一次，引导用户处理（标题随失败原因变化）。</summary>
+    public event EventHandler<ConnectionHint>? HintRequested;
 
     /// <summary>手机端返回妙播设备列表/妙播投射状态时触发（cast_devices 消息）。</summary>
     public event EventHandler<CastDevicesMessage>? CastDevicesUpdated;
@@ -132,14 +164,74 @@ public class NetworkManager
     }
 
     /// <summary>
-    /// 立即重新搜索并连接：放弃当前退避等待、掐断现有连接，让主循环马上重新走一遍发现流程。
+    /// 立即重新搜索并连接：放弃当前退避等待，让主循环马上重新走一遍发现流程。
     /// 上次成功的地址仍会作为候选优先尝试（广播被屏蔽时它是唯一可用的路径）。
+    /// 已连接时先探测现有连接是否真的活着：活着只刷新状态展示，不掐断健康连接——
+    /// 否则"刷新"这个动作本身就会制造"连接已断开"假象。连接参数（配对码/地址）变化时传 force 强制重连。
     /// </summary>
-    public void Reconnect()
+    public void Reconnect(bool force = false)
     {
+        if (!force && IsConnected)
+        {
+            _ = VerifyLiveConnectionAsync();
+            return;
+        }
+
         _backoffMs = FastRetryMs;
         _scanDue = true;
         try { _webSocket?.Abort(); } catch { }
+        Wake();
+    }
+
+    /// <summary>
+    /// 已连接时的连通性探测：发一条 ping 等 pong。对端回过 pong（新版手机）就按 pong 判活/死；
+    /// 旧版手机不回 pong，退化成"发送路径没抛异常就算活"。判定死亡才掐断重连。
+    /// </summary>
+    private async Task VerifyLiveConnectionAsync()
+    {
+        if (Interlocked.Exchange(ref _verifyInFlight, 1) != 0) return;
+        try
+        {
+            var socket = _webSocket;
+            if (socket?.State != WebSocketState.Open) return;
+
+            long before = Interlocked.Read(ref _lastPongAt);
+            bool canPong = _pongSeen;
+            if (!await SendJsonAsync(new { type = "ping" }))
+            {
+                DropAndRescan(socket);
+                return;
+            }
+
+            for (int i = 0; i < 25 && Interlocked.Read(ref _lastPongAt) == before; i++)
+            {
+                await Task.Delay(100);
+            }
+
+            bool ponged = Interlocked.Read(ref _lastPongAt) != before;
+            if (ponged) _pongSeen = true;
+            else if (canPong || socket.State != WebSocketState.Open)
+            {
+                DropAndRescan(socket);
+                return;
+            }
+
+            // 活着：只刷新状态展示（文本没变时 SetState 自动去重，不会打扰用户）
+            if (State == ConnectionState.Connected)
+            {
+                SetState(ConnectionState.Connected, ConnectedText(ConnectedDevice));
+            }
+        }
+        catch { }
+        finally { Interlocked.Exchange(ref _verifyInFlight, 0); }
+    }
+
+    /// <summary>判定链路已死：掐断并让主循环立刻重新搜索。</summary>
+    private void DropAndRescan(ClientWebSocket socket)
+    {
+        _backoffMs = FastRetryMs;
+        _scanDue = true;
+        try { socket.Abort(); } catch { }
         Wake();
     }
 
@@ -189,32 +281,57 @@ public class NetworkManager
                     continue;
                 }
 
-                _backoffMs = FastRetryMs;
-                _failStreakStart = 0;
-                _hintFired = false;
-
                 var connection = connected.Value;
+                int settle;
                 using (connection.Socket)
                 {
                     _webSocket = connection.Socket;
                     ConnectedDevice = connection.Endpoint.ToString();
                     RememberEndpoint(connection.Endpoint);
-                    SetState(ConnectionState.Connected, PhoneName.Length > 0
-                        ? $"已连接 {PhoneName}（{connection.Endpoint}）"
-                        : $"已连接到 Android 设备（{connection.Endpoint}）");
+                    _pongSeen = false;
+                    Interlocked.Exchange(ref _lastPongAt, 0);
 
-                    // 接入认证：先发配对码（手机端校验失败会掐断连接），再请求历史同步。
-                    // 同一 WebSocket 上 SendAsync 不可并发，必须串行 await。
-                    await SendJsonAsync(new { type = "auth", token = AppSettings.Instance.PairCode });
-                    await SendJsonAsync(new
+                    // 接入认证：先发配对码，手机端校验失败会立刻 close(4001)。
+                    // 认证结算之前不宣布"已连接"、也不清失败计时——否则配对码不对时状态会在
+                    // "已连接/连接已断开"之间来回跳，看起来就像软件没刷新状态。
+                    SetState(ConnectionState.Connecting, $"正在验证配对码（{connection.Endpoint}）...");
+                    if (await SendJsonAsync(new { type = "auth", token = AppSettings.Instance.PairCode }))
                     {
-                        type = "history_sync_request",
-                        since = HistoryService.Instance.NewestTimestamp()
-                    });
+                        var receiveTask = ReceiveLoopAsync(connection.Socket, token);
+                        settle = await AuthSettleAsync(connection.Socket, receiveTask, token);
 
-                    await Task.WhenAny(
-                        ReceiveLoopAsync(connection.Socket, token),
-                        KeepAliveLoopAsync(connection.Socket, token));
+                        if (settle == SettleOk)
+                        {
+                            _backoffMs = FastRetryMs;
+                            _failStreakStart = 0;
+                            _hintFired = false;
+                            _lastFailAuth = false;
+
+                            SetState(ConnectionState.Connected, ConnectedText(connection.Endpoint.ToString()));
+
+                            // 认证通过后再请求历史同步（未认证连接手机端一律拒绝）
+                            await SendJsonAsync(new
+                            {
+                                type = "history_sync_request",
+                                since = HistoryService.Instance.NewestTimestamp()
+                            });
+
+                            await Task.WhenAny(
+                                receiveTask,
+                                KeepAliveLoopAsync(connection.Socket, token));
+                        }
+                        else
+                        {
+                            NoteFailure(settle == SettleAuthRejected);
+                            try { connection.Socket.Abort(); } catch { }
+                            try { await receiveTask; } catch { }
+                        }
+                    }
+                    else
+                    {
+                        settle = SettleLinkLost;
+                        NoteFailure();
+                    }
                 }
 
                 _webSocket = null;
@@ -222,7 +339,9 @@ public class NetworkManager
                 PhoneName = string.Empty;
                 if (_isRunning && !token.IsCancellationRequested)
                 {
-                    SetState(ConnectionState.Searching, "连接已断开，正在重新搜索...");
+                    SetState(ConnectionState.Searching, settle == SettleAuthRejected
+                        ? "配对码不正确：请在「设置 → 连接」核对手机端配对码"
+                        : "连接已断开，正在重新搜索...");
                 }
                 // 断开后重新全量搜索：手机换网络后 IP 往往变了
                 _scanDue = true;
@@ -427,6 +546,28 @@ public class NetworkManager
         }
     }
 
+    /// <summary>
+    /// 认证结算：给手机端一点时间回应配对码。配对码正确就保持沉默（连接继续收消息），
+    /// 错误立刻 close(4001)。结算没过就不算连接成功，避免"已连接/连接已断开"来回跳。
+    /// </summary>
+    private static async Task<int> AuthSettleAsync(ClientWebSocket socket, Task receiveTask, CancellationToken token)
+    {
+        long deadline = Environment.TickCount64 + AuthSettleMs;
+        while (Environment.TickCount64 < deadline)
+        {
+            if (receiveTask.IsCompleted || socket.State != WebSocketState.Open)
+            {
+                return (int)(socket.CloseStatus ?? 0) == AuthRejectCloseCode ? SettleAuthRejected : SettleLinkLost;
+            }
+            try { await Task.Delay(50, token); }
+            catch (OperationCanceledException) { return SettleLinkLost; }
+        }
+
+        return receiveTask.IsCompleted || socket.State != WebSocketState.Open
+            ? ((int)(socket.CloseStatus ?? 0) == AuthRejectCloseCode ? SettleAuthRejected : SettleLinkLost)
+            : SettleOk;
+    }
+
     private static async Task<string?> ReadMessageAsync(WebSocket socket, byte[] buffer, MemoryStream ms,
         CancellationToken token)
     {
@@ -445,9 +586,10 @@ public class NetworkManager
     }
 
     /// <summary>
-    /// 应用层保活：定时发一条 ping。手机端不会回它（协议层心跳由 KeepAliveInterval 负责），
-    /// 真正的用处是持续走一遍发送路径——链路在校园网里悄悄断掉时，这里会先抛异常，
-    /// 主循环随即重连，不必等 TCP 自己超时。
+    /// 应用层保活 + 半开链路检测：定时发一条 ping，手机端收到后回 pong。
+    /// 发送路径在链路悄悄断掉时会先抛异常（校园网 AP 回收空闲连接），这里立刻退出触发重连；
+    /// 对会回 pong 的手机，超时没等到 pong 同样判死——Wi-Fi 切换后 socket 看着还 Open，
+    /// 不这样查状态会一直卡在"已连接"。旧版手机不回 pong，不按丢 pong 判死，避免误杀。
     /// </summary>
     private async Task KeepAliveLoopAsync(ClientWebSocket socket, CancellationToken token)
     {
@@ -458,9 +600,18 @@ public class NetworkManager
                 await Task.Delay(KeepAliveIntervalMs, token);
                 if (socket.State != WebSocketState.Open) break;
 
-                await socket.SendAsync(
-                    new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"type\":\"ping\"}")),
-                    WebSocketMessageType.Text, true, token);
+                long before = Interlocked.Read(ref _lastPongAt);
+                bool canPong = _pongSeen;
+                if (!await SendRawAsync("{\"type\":\"ping\"}")) break;
+
+                long deadline = Environment.TickCount64 + PongTimeoutMs;
+                while (Interlocked.Read(ref _lastPongAt) == before && Environment.TickCount64 < deadline)
+                {
+                    await Task.Delay(100, token);
+                }
+
+                if (Interlocked.Read(ref _lastPongAt) != before) _pongSeen = true;
+                else if (canPong) break; // 会回 pong 的手机没回：链路已半开
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
             catch { break; }
@@ -487,13 +638,19 @@ public class NetworkManager
                         if (name.Length > 0 && name != PhoneName)
                         {
                             PhoneName = name;
-                            // 握手消息晚于连接成功到达，这里补一次状态刷新，让托盘显示手机型号
-                            if (IsConnected)
+                            // 握手消息晚于连接成功到达，这里补一次状态刷新，让托盘显示手机型号；
+                            // 认证结算中（Connecting）还不算连接成功，别提前把状态刷成"已连接"
+                            if (State == ConnectionState.Connected)
                             {
-                                SetState(ConnectionState.Connected, $"已连接 {name}（{ConnectedDevice}）");
+                                SetState(ConnectionState.Connected, ConnectedText(ConnectedDevice));
                             }
                         }
                     }
+                    break;
+                case "pong":
+                    // 手机端对保活/探测 ping 的回应，链路活性凭据
+                    _pongSeen = true;
+                    Interlocked.Exchange(ref _lastPongAt, Environment.TickCount64);
                     break;
                 case "notification":
                     var msg = JsonSerializer.Deserialize<NotificationMessage>(json)!;
@@ -574,19 +731,34 @@ public class NetworkManager
         await SendJsonAsync(new { type = "miplay_switch", target });
     }
 
-    private async Task SendJsonAsync(object payload)
+    private async Task<bool> SendJsonAsync(object payload)
+        => await SendRawAsync(JsonSerializer.Serialize(payload));
+
+    /// <summary>发送原始文本帧。同一 WebSocket 上 SendAsync 不可并发，统一过发送锁；发送失败返回 false。</summary>
+    private async Task<bool> SendRawAsync(string json)
     {
         var socket = _webSocket;
-        if (socket?.State != WebSocketState.Open) return;
+        if (socket?.State != WebSocketState.Open) return false;
         try
         {
-            var json = JsonSerializer.Serialize(payload);
-            await socket.SendAsync(
-                new ArraySegment<byte>(Encoding.UTF8.GetBytes(json)),
-                WebSocketMessageType.Text, true, CancellationToken.None);
+            await _sendLock.WaitAsync();
+            try
+            {
+                if (socket.State != WebSocketState.Open) return false;
+                await socket.SendAsync(
+                    new ArraySegment<byte>(Encoding.UTF8.GetBytes(json)),
+                    WebSocketMessageType.Text, true, CancellationToken.None);
+                return true;
+            }
+            finally { _sendLock.Release(); }
         }
-        catch { }
+        catch { return false; }
     }
+
+    /// <summary>已连接状态文案（拿到手机型号后带上型号）。</summary>
+    private string ConnectedText(string endpoint) => PhoneName.Length > 0
+        ? $"已连接 {PhoneName}（{endpoint}）"
+        : $"已连接到 Android 设备（{endpoint}）";
 
     private void SetState(ConnectionState state, string text)
     {
@@ -599,9 +771,13 @@ public class NetworkManager
         try { ConnectionStateChanged?.Invoke(this, state); } catch { }
     }
 
-    /// <summary>连续连不上时，到达阈值后提示一次（手机端没开服务、校园网屏蔽广播等）。</summary>
-    private void NoteFailure()
+    /// <summary>
+    /// 连续连不上时，到达阈值后提示一次（手机端没开服务、校园网屏蔽广播等）。
+    /// authRejected：这轮失败里出现过配对码被拒（手机端 close 4001）——提示要引向配对码，不能说"没找到手机"。
+    /// </summary>
+    private void NoteFailure(bool authRejected = false)
     {
+        if (authRejected) _lastFailAuth = true;
         if (_failStreakStart == 0) _failStreakStart = Environment.TickCount64;
         if (_hintFired || Environment.TickCount64 - _failStreakStart < HintAfterMs) return;
 
@@ -609,9 +785,17 @@ public class NetworkManager
         var manualConfigured = LanEndpoint.TryParse(
             AppSettings.Instance.ManualPhoneHost, AppSettings.Instance.ManualPhonePort, out _);
 
-        var hint = manualConfigured
-            ? "已按指定地址尝试连接但未成功。请确认手机端 MiToast 已点「启动服务」，且与电脑处于同一网络。"
-            : "一直没发现手机。校园网常屏蔽设备发现广播，可在「设置 → 连接」里手动填写手机地址（手机 MiToast 首页有显示）。";
+        var hint = _lastFailAuth
+            ? new ConnectionHint(
+                "MiToast 配对失败",
+                "手机已找到但配对码不对。请在手机 MiToast 首页查看配对码，填到「设置 → 连接 → 配对码」并保存。")
+            : manualConfigured
+                ? new ConnectionHint(
+                    "MiToast 没找到手机",
+                    "已按指定地址尝试连接但未成功。请确认手机端 MiToast 已点「启动服务」，且与电脑处于同一网络。")
+                : new ConnectionHint(
+                    "MiToast 没找到手机",
+                    "一直没发现手机。校园网常屏蔽设备发现广播，可在「设置 → 连接」里手动填写手机地址（手机 MiToast 首页有显示）。");
 
         try { HintRequested?.Invoke(this, hint); } catch { }
     }
@@ -674,11 +858,12 @@ public class NetworkManager
             _backoffMs = FastRetryMs;
             _scanDue = true;
 
-            // 本机地址集变了（插拔网线、Wi-Fi 换了 AP/网段、VPN 起停）：
-            // 旧连接必然失效，直接掐掉立刻重连，不等 TCP 自己超时。
+            // 本机地址集变了（插拔网线、Wi-Fi 换了 AP/网段、VPN/虚拟网卡起停）：先探测现有连接
+            // 是否还活着。虚拟网卡（WSL/Docker/Hyper-V）抖动很常见，一变就掐健康连接会让软件
+            // 误报"连接已断开"甚至弹"没找到手机"；真断了探测会在秒级发现并立刻重连，不等 TCP 超时。
             if (addressesChanged && IsConnected)
             {
-                try { _webSocket?.Abort(); } catch { }
+                _ = VerifyLiveConnectionAsync();
             }
 
             Wake();

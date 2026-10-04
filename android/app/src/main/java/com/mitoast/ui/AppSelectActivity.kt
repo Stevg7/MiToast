@@ -25,13 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,11 +47,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mitoast.HyperCheckbox
+import com.mitoast.HyperSwitch
 import com.mitoast.MiToastTheme
-import com.mitoast.PageBg
-import com.mitoast.BrandOrange
-import com.mitoast.TextDark
-import com.mitoast.TextGray
+import com.mitoast.hyperos
 import com.mitoast.prefs.AppWhitelistManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,6 +77,7 @@ private data class InstalledApp(
 @Composable
 private fun AppSelectScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val c = hyperos()
     val scope = rememberCoroutineScope()
 
     var apps by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
@@ -116,9 +113,9 @@ private fun AppSelectScreen(onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PageBg)
+            .background(c.pageBg)
     ) {
-        // 顶部标题栏
+        // 顶部标题栏：miuix TopAppBar 小标题 = title3 20sp Medium
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -128,15 +125,15 @@ private fun AppSelectScreen(onBack: () -> Unit) {
             Text(
                 text = "< 返回",
                 fontSize = 15.sp,
-                color = BrandOrange,
+                color = c.primary,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.clickable(onClick = onBack)
             )
             Text(
                 text = "通知应用白名单",
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextDark,
+                fontWeight = FontWeight.Medium,
+                color = c.text,
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 12.dp)
@@ -144,15 +141,15 @@ private fun AppSelectScreen(onBack: () -> Unit) {
             Text(
                 text = "已选 $selectedCount 个",
                 fontSize = 13.sp,
-                color = BrandOrange,
+                color = c.primary,
                 fontWeight = FontWeight.Medium
             )
         }
 
-        // 模式设置卡片
+        // 模式设置卡片：miuix Card = 16dp 圆角、surfaceContainer 底
         Surface(
-            color = androidx.compose.ui.graphics.Color.White,
-            shape = RoundedCornerShape(18.dp),
+            color = c.card,
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.padding(horizontal = 16.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -160,56 +157,56 @@ private fun AppSelectScreen(onBack: () -> Unit) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "白名单模式",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextDark
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = c.text
                         )
                         Text(
                             "开启后仅同步勾选的应用；关闭时同步所有非系统应用",
-                            fontSize = 12.sp,
-                            color = TextGray
+                            fontSize = 14.sp,
+                            color = c.textSecondary
                         )
                     }
-                    Switch(
+                    HyperSwitch(
                         checked = whitelistMode,
                         onCheckedChange = { enabled ->
                             whitelistMode = enabled
                             AppWhitelistManager.setWhitelistEnabled(context, enabled)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = androidx.compose.ui.graphics.Color.White,
-                            checkedTrackColor = BrandOrange,
-                            uncheckedTrackColor = androidx.compose.ui.graphics.Color(0xFFE5E5EA)
-                        )
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "显示系统应用（短信等系统 App 需开启此项后勾选）",
-                        fontSize = 13.sp,
-                        color = TextDark,
+                        fontSize = 14.sp,
+                        color = c.text,
                         modifier = Modifier.weight(1f)
                     )
-                    Switch(
+                    HyperSwitch(
                         checked = showSystem,
-                        onCheckedChange = { showSystem = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = androidx.compose.ui.graphics.Color.White,
-                            checkedTrackColor = BrandOrange,
-                            uncheckedTrackColor = androidx.compose.ui.graphics.Color(0xFFE5E5EA)
-                        )
+                        onCheckedChange = { showSystem = it }
                     )
                 }
             }
         }
 
-        // 搜索框
+        // 搜索框：HyperOS 输入框 = 无边框填充式（secondaryContainer 底、16 圆角、聚焦主色描边）
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("搜索应用名称或包名", fontSize = 14.sp) },
+            placeholder = { Text("搜索应用名称或包名", fontSize = 14.sp, color = c.textSecondary) },
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = c.primary,
+                unfocusedBorderColor = c.field,
+                focusedContainerColor = c.field,
+                unfocusedContainerColor = c.field,
+                cursorColor = c.primary,
+                focusedTextColor = c.text,
+                unfocusedTextColor = c.text
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -220,7 +217,7 @@ private fun AppSelectScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = BrandOrange)
+                CircularProgressIndicator(color = c.primary)
             }
         } else {
             LazyColumn(
@@ -254,11 +251,12 @@ private fun AppRow(
     checked: Boolean,
     onToggle: () -> Unit
 ) {
+    val c = hyperos()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(androidx.compose.ui.graphics.Color.White)
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.card)
             .clickable(onClick = onToggle)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -270,43 +268,35 @@ private fun AppRow(
                 contentDescription = null,
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
             )
         } else {
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(androidx.compose.ui.graphics.Color(0xFFF5F5F7))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(c.field)
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = app.label,
-                fontSize = 15.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = TextDark,
+                color = c.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = if (app.isSystem) "${app.packageName} · 系统应用" else app.packageName,
-                fontSize = 11.sp,
-                color = TextGray,
+                fontSize = 12.sp,
+                color = c.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Checkbox(
-            checked = checked,
-            onCheckedChange = { onToggle() },
-            colors = CheckboxDefaults.colors(
-                checkedColor = BrandOrange,
-                uncheckedColor = androidx.compose.ui.graphics.Color(0xFFD1D1D6),
-                checkmarkColor = androidx.compose.ui.graphics.Color.White
-            )
-        )
+        HyperCheckbox(checked = checked, onCheckedChange = onToggle)
     }
 }
 

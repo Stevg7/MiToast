@@ -1,0 +1,126 @@
+<Window x:Class="MiToast.McpLanHelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="局域网 MCP 接口使用说明"
+        Width="660"
+        Height="760"
+        MinWidth="560"
+        MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        FontFamily="{StaticResource UiFontFamily}"
+        Background="{DynamicResource PageBgBrush}">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="44"
+                            ResizeBorderThickness="6"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="44"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Background="Transparent">
+            <TextBlock Text="局域网 MCP 接口 · 使用说明"
+                       FontSize="12"
+                       Margin="16,0,0,0"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal">
+                <Button Style="{StaticResource CaptionCloseButton}" Click="CloseButton_Click"
+                        AutomationProperties.Name="关闭">
+                    <Viewbox Width="11" Height="11">
+                        <Canvas Width="1047.6" Height="1047.6">
+                            <Path Data="F1 M 523.8,593.3 L 832.7,903.9 Q 845.0,916.5 857.1,916.3 Q 869.2,916.2 881.2,903.9 L 897.5,887.6 Q 909.6,875.6 909.7,863.8 Q 909.9,852.0 897.5,839.1 L 588.6,528.4 L 898.8,218.3 Q 911.0,206.6 911.3,194.8 Q 911.7,182.9 898.8,170.5 L 881.0,152.7 Q 858.2,129.9 833.6,153.8 L 523.8,463.6 L 213.1,154.7 Q 201.5,142.7 189.2,142.5 Q 177.0,142.3 164.6,154.7 L 148.6,171.0 Q 136.3,182.7 136.3,194.9 Q 136.3,207.1 148.2,219.2 L 458.9,528.4 L 149.1,839.1 Q 137.1,852.0 137.1,863.8 Q 137.1,875.6 149.1,887.6 L 165.5,903.9 Q 178.4,916.5 190.0,916.5 Q 201.6,916.5 214.0,903.9 Z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                <Path.RenderTransform>
+                                    <MatrixTransform Matrix="1,0,0,-1,0,1047.6"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Canvas>
+                    </Viewbox>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="26,4,26,22">
+            <StackPanel>
+                <TextBlock Text="局域网 MCP 接口"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Text="开启后，MiToast 在本机监听一个端口，把历史通知查询以 MCP over HTTP 接口提供给局域网内的其他设备。接口只读：其他设备只能查询，不能修改任何内容。"
+                           FontSize="13"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,6,0,14"/>
+
+                <!-- 当前状态 -->
+                <Border Background="{DynamicResource HoverBrush}" CornerRadius="8" Padding="14,11" Margin="0,0,0,16">
+                    <TextBlock x:Name="StatusText"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </Border>
+
+                <TextBlock Text="使用步骤" FontSize="16" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                <TextBlock Text="① 在「设置 → 连接」里设置配对码——它是访问凭据，与手机配对共用同一串；没设置时开关无法打开。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <TextBlock Text="② 打开「局域网 MCP 接口」开关，状态行会显示端点地址（如 http://192.168.1.201:18081/mcp）。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <TextBlock Text="③ 其他设备首次连接时，客户端通常会打开浏览器让你输入一次配对码做授权。访问令牌 30 天有效、刷新令牌 90 天自动轮换续期，授权信息加密保存在本机，重启后依然有效。同时 Windows 防火墙会弹窗，选择放行「专用网络」。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <TextBlock Text="④ 在其他设备上按下面任一方式访问；不用时建议关掉开关。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,16"/>
+
+                <TextBlock Text="方式一：MCP 客户端（推荐）" FontSize="16" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                <TextBlock Text="在另一台电脑的支持 MCP 的客户端（如 ZCode）里注册一个 HTTP 服务器，URL 填上方端点地址即可：客户端会自动走 OAuth 流程（注册 → 浏览器输入配对码 → 拿令牌）。也可以手工配置请求头 Authorization: Bearer &lt;配对码&gt; 直接接入。两种方式都能使用 query_notifications 与 notification_stats 两个查询工具。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,16"/>
+
+                <TextBlock Text="方式二：curl / 脚本" FontSize="16" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                <TextBlock Text="无需 MCP 客户端，任何能发 HTTP POST 的工具都可以。示例（把 &lt;配对码&gt; 换成你的配对码）："
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+                <Border Background="{DynamicResource FieldBgBrush}" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
+                    <TextBlock x:Name="CurlText"
+                               FontFamily="Consolas, Courier New"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextPrimaryBrush}"/>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                    <Button Content="复制示例命令"
+                            Style="{StaticResource SecondaryButton}"
+                            Height="32"
+                            Padding="16,0"
+                            Click="CopyCurlButton_Click"/>
+                    <TextBlock x:Name="CopyFeedback"
+                               Text=""
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0"
+                               Foreground="{DynamicResource TextSecondaryBrush}"/>
+                </StackPanel>
+
+                <TextBlock Text="安全须知" FontSize="16" FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                <TextBlock Text="• 每个请求都必须带凭据（配对码或授权令牌）；某设备连续失败 20 次会被临时封禁 10 分钟。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <TextBlock Text="• 授权信息加密保存在本机（%AppData%\MiToast\mcp-tokens.json，DPAPI），删除该文件即可吊销所有设备的授权。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <TextBlock Text="• 传输是明文 HTTP，只建议在家庭/可信局域网内使用；跨不可信网络请自建隧道（如 WireGuard）。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <TextBlock Text="• 配对码即钥匙，不要把它写进会提交到版本库或发给他人的文件里。"
+                           FontSize="13.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

@@ -41,8 +41,11 @@ public class AppSettings
     /// <summary>音乐通知常驻：媒体卡片排在最前，暂停播放后也不自动消失</summary>
     public bool MusicPersistent { get; set; } = true;
 
-    /// <summary>勿扰模式：off（关）/ pc（PC端静默）/ sync（跟随手机DND）</summary>
-    public string DndMode { get; set; } = "off";
+    /// <summary>勿扰模式：开启后通知仍保存到历史，但 PC 端不弹卡片（与托盘菜单实时同步）</summary>
+    public bool DndEnabled { get; set; } = false;
+
+    /// <summary>同步手机端勿扰：手机勿扰开启时，PC 端自动同步静默（不弹卡片）</summary>
+    public bool DndSyncPhone { get; set; } = false;
 
     /// <summary>
     /// 手动指定的手机地址（校园网等屏蔽设备发现广播的网络里使用；手机端首页会显示手机地址）。
@@ -75,6 +78,18 @@ public class AppSettings
     /// </summary>
     public bool SubnetSweepEnabled { get; set; } = false;
 
+    /// <summary>本地总结的时间窗口（小时）：手动生成总结时聚合最近 N 小时的历史通知</summary>
+    public int LocalSummaryWindowHours { get; set; } = 72;
+
+    /// <summary>
+    /// 局域网 MCP 接口：在本机监听 TCP 端口提供只读历史通知查询（MCP over HTTP），
+    /// 其他设备凭 Bearer 配对码访问。默认关闭。
+    /// </summary>
+    public bool McpLanEnabled { get; set; } = false;
+
+    /// <summary>局域网 MCP 接口的监听端口</summary>
+    public int McpLanPort { get; set; } = 18081;
+
     public static string ConfigDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MiToast");
 
@@ -90,6 +105,13 @@ public class AppSettings
                 var settings = JsonSerializer.Deserialize<AppSettings>(json);
                 if (settings != null)
                 {
+                    // 旧版三态勿扰（off/pc/sync）迁移为两个开关：pc→开关一；sync→两开关同开
+                    if (json.Contains("\"DndMode\": \"pc\"")) settings.DndEnabled = true;
+                    if (json.Contains("\"DndMode\": \"sync\""))
+                    {
+                        settings.DndEnabled = true;
+                        settings.DndSyncPhone = true;
+                    }
                     settings.Normalize();
                     return settings;
                 }
@@ -108,10 +130,10 @@ public class AppSettings
         if (ScreenMargin < 0 || ScreenMargin > 200) ScreenMargin = 40;
         if (NotificationGap < 0 || NotificationGap > 40) NotificationGap = 3;
         if (CardDensity < 0.75 || CardDensity > 1.25) CardDensity = 1.0;
+        if (LocalSummaryWindowHours is < 6 or > 720) LocalSummaryWindowHours = 72;
+        if (McpLanPort is < 1024 or > 65535) McpLanPort = 18081;
         if (Position is not ("TopRight" or "BottomRight" or "TopLeft" or "BottomLeft"))
             Position = "TopRight";
-        if (DndMode is not ("off" or "pc" or "sync"))
-            DndMode = "off";
 
         (ManualPhoneHost, ManualPhonePort) = NormalizeEndpoint(ManualPhoneHost, ManualPhonePort);
         (LastPhoneHost, LastPhonePort) = NormalizeEndpoint(LastPhoneHost, LastPhonePort);

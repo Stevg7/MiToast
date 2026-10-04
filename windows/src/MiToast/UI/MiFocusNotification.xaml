@@ -3,8 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" Background="Transparent">
+             mc:Ignorable="d" Background="Transparent"
+             FontFamily="{StaticResource UiFontFamily}">
     <UserControl.Resources>
+        <!-- HyperOS 主色族：miuix 令牌（浅 #3482FF / 深 #277AF7，ApplyThemeColors 按主题替换实例） -->
+        <SolidColorBrush x:Key="ToastAccentBrush" Color="#FF3482FF"/>
+        <SolidColorBrush x:Key="ToastAccentHoverBrush" Color="#FF2B74E8"/>
+        <SolidColorBrush x:Key="ToastAccentSoftBrush" Color="#223482FF"/>
+        <SolidColorBrush x:Key="ToastIconBgBrush" Color="#FFF0F0F0"/>
+        <SolidColorBrush x:Key="ToastTrackBrush" Color="#FFE6E6E6"/>
         <!-- 媒体控制按钮：透明背景、悬停浅灰圆角，图标色继承 Foreground -->
         <Style x:Key="MediaButton" TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
@@ -32,7 +39,7 @@
         </Style>
     </UserControl.Resources>
     <Border x:Name="RootBorder"
-            CornerRadius="20"
+            CornerRadius="24"
             Background="{x:Null}"
             Padding="20,18,20,18"
             RenderTransformOrigin="0.5,0.5">
@@ -59,8 +66,8 @@
                 <Border Grid.Column="0"
                         x:Name="IconBackgroundBorder"
                         Width="44" Height="44"
-                        CornerRadius="11"
-                        Background="#FFF5F5F7"
+                        CornerRadius="12"
+                        Background="{DynamicResource ToastIconBgBrush}"
                         Margin="0,0,12,0">
                     <Image x:Name="AppIconImage"
                            Width="28" Height="28"
@@ -90,14 +97,29 @@
                             ToolTip="在手机上打开应用">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border x:Name="OpenBg" Background="Transparent" CornerRadius="8" Padding="10,6">
-                                    <TextBlock Text="打开"
-                                               FontSize="11" FontWeight="Medium"
-                                               Foreground="{TemplateBinding Foreground}"/>
+                                <Border x:Name="OpenBg" Background="Transparent" CornerRadius="10" Padding="9,7">
+                                    <!-- miuix Forward：点按在手机上打开对应应用 -->
+                                    <Viewbox Width="15" Height="15">
+                                        <Canvas Width="1141.2" Height="1141.2">
+                                            <Path Data="F1 M 848.9,148.1 Q 898.8,173.6 927.0,226.3 Q 940.2,252.7 943.1,289.7 Q 946.0,326.7 946.0,412.6 V 510.7 Q 946.0,524.9 939.0,533.3 Q 932.0,541.6 913.9,541.6 H 893.6 Q 874.8,541.6 867.7,533.3 Q 860.5,524.9 860.5,510.7 V 372.9 Q 860.5,323.9 858.8,303.1 Q 857.1,282.4 849.9,268.1 Q 836.3,238.8 807.1,225.2 Q 792.8,218.1 772.4,216.3 Q 751.9,214.6 702.3,214.6 H 372.4 Q 322.8,214.6 302.3,216.3 Q 281.9,218.1 266.7,225.2 Q 238.4,239.5 224.7,268.1 Q 217.6,282.4 215.9,303.1 Q 214.2,323.9 214.2,372.9 V 700.9 Q 214.2,750.6 215.9,771.0 Q 217.6,791.4 224.7,805.7 Q 237.5,832.7 266.7,848.5 Q 281.9,855.7 302.3,857.4 Q 322.8,859.1 372.4,859.1 H 505.3 Q 518.6,859.1 526.6,866.6 Q 534.7,874.1 534.7,889.4 V 914.4 Q 534.7,929.7 526.6,937.2 Q 518.6,944.6 505.3,944.6 H 412.1 Q 326.2,944.6 289.2,941.7 Q 252.2,938.8 225.9,925.6 Q 173.8,898.4 147.6,847.5 Q 134.2,821.1 131.0,784.1 Q 127.7,747.1 127.7,660.3 V 412.6 Q 127.7,326.7 131.0,289.7 Q 134.2,252.7 147.6,226.3 Q 174.7,173.6 225.9,148.1 Q 252.2,134.9 289.2,132.0 Q 326.2,129.1 412.1,129.1 H 661.6 Q 748.5,129.1 785.5,132.0 Q 822.5,134.9 848.9,148.1 Z"
+                                                  Fill="{TemplateBinding Foreground}">
+                                                <Path.RenderTransform>
+                                                    <!-- Compose 组变换 scaleY=-1 的等价烘焙 -->
+                                                    <MatrixTransform Matrix="1,0,0,-1,0,1141.2"/>
+                                                </Path.RenderTransform>
+                                            </Path>
+                                            <Path Data="F1 M 517.2,455.4 L 928.0,865.5 V 700.0 Q 928.0,685.6 934.5,678.6 Q 941.1,671.5 954.6,671.5 H 986.0 Q 999.5,671.5 1006.5,678.6 Q 1013.5,685.6 1013.5,700.0 V 957.8 Q 1013.5,985.2 1000.5,998.6 Q 987.5,1012.1 960.1,1012.1 H 699.5 Q 687.9,1012.1 680.4,1005.0 Q 672.9,997.8 672.9,985.5 V 954.1 Q 672.9,940.8 680.1,933.7 Q 687.2,926.6 699.5,926.6 H 866.9 L 458.6,518.6 Q 448.6,508.3 447.6,497.2 Q 446.5,486.0 456.8,475.7 L 476.2,456.3 Q 486.4,446.1 497.2,446.5 Q 507.9,447.0 517.2,455.4 Z"
+                                                  Fill="{TemplateBinding Foreground}">
+                                                <Path.RenderTransform>
+                                                    <MatrixTransform Matrix="1,0,0,-1,0,1141.2"/>
+                                                </Path.RenderTransform>
+                                            </Path>
+                                        </Canvas>
+                                    </Viewbox>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="OpenBg" Property="Background" Value="#22FF6900"/>
+                                        <Setter TargetName="OpenBg" Property="Background" Value="{DynamicResource ToastAccentSoftBrush}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -113,7 +135,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="CodeButtonBorder"
-                                        Background="#FFFF6900"
+                                        Background="{DynamicResource ToastAccentBrush}"
                                         CornerRadius="12"
                                         Padding="14,8">
                                     <ContentPresenter HorizontalAlignment="Center"
@@ -121,10 +143,10 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="CodeButtonBorder" Property="Background" Value="#FFE55E00"/>
+                                        <Setter TargetName="CodeButtonBorder" Property="Background" Value="{DynamicResource ToastAccentHoverBrush}"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter TargetName="CodeButtonBorder" Property="Background" Value="#FFCC5400"/>
+                                        <Setter TargetName="CodeButtonBorder" Property="Background" Value="{DynamicResource ToastAccentHoverBrush}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -144,11 +166,17 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="CloseBg" Background="Transparent" CornerRadius="14">
-                                    <TextBlock Text="✕"
-                                               FontSize="12"
-                                               Foreground="{TemplateBinding Foreground}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
+                                    <!-- miuix Close -->
+                                    <Viewbox Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="1047.6" Height="1047.6">
+                                            <Path Data="F1 M 523.8,593.3 L 832.7,903.9 Q 845.0,916.5 857.1,916.3 Q 869.2,916.2 881.2,903.9 L 897.5,887.6 Q 909.6,875.6 909.7,863.8 Q 909.9,852.0 897.5,839.1 L 588.6,528.4 L 898.8,218.3 Q 911.0,206.6 911.3,194.8 Q 911.7,182.9 898.8,170.5 L 881.0,152.7 Q 858.2,129.9 833.6,153.8 L 523.8,463.6 L 213.1,154.7 Q 201.5,142.7 189.2,142.5 Q 177.0,142.3 164.6,154.7 L 148.6,171.0 Q 136.3,182.7 136.3,194.9 Q 136.3,207.1 148.2,219.2 L 458.9,528.4 L 149.1,839.1 Q 137.1,852.0 137.1,863.8 Q 137.1,875.6 149.1,887.6 L 165.5,903.9 Q 178.4,916.5 190.0,916.5 Q 201.6,916.5 214.0,903.9 Z"
+                                                  Fill="{TemplateBinding Foreground}">
+                                                <Path.RenderTransform>
+                                                    <MatrixTransform Matrix="1,0,0,-1,0,1047.6"/>
+                                                </Path.RenderTransform>
+                                            </Path>
+                                        </Canvas>
+                                    </Viewbox>
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
@@ -160,7 +188,52 @@
                     </Button>
                 </StackPanel>
             </Grid>
-            
+
+            <!-- 媒体封面：默认小图缩略，右下按钮（或点封面）在缩略与整宽大图之间放大切换 -->
+            <Grid x:Name="CoverGrid"
+                  Visibility="Collapsed"
+                  Width="84" Height="84"
+                  HorizontalAlignment="Center"
+                  Margin="0,0,0,12"
+                  SizeChanged="CoverGrid_SizeChanged">
+                <Border x:Name="CoverBorder"
+                        CornerRadius="16"
+                        Background="{DynamicResource ToastIconBgBrush}"
+                        ClipToBounds="True"
+                        Cursor="Hand"
+                        MouseLeftButtonUp="Cover_Click">
+                    <Image x:Name="CoverImage"
+                           Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                </Border>
+                <Button x:Name="CoverToggleBtn"
+                        Width="30" Height="30" Margin="8"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        Cursor="Hand" Click="CoverToggleBtn_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="CoverBtnBg" Background="#66FFFFFF" CornerRadius="15">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="CoverBtnBg" Property="Background" Value="#99FFFFFF"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="CoverBtnBg" Property="Background" Value="#B3FFFFFF"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <TextBlock x:Name="CoverToggleGlyph"
+                               Text="&#xE740;"
+                               FontFamily="Segoe MDL2 Assets"
+                               FontSize="13"
+                               Foreground="#FF1D1D1F"/>
+                </Button>
+            </Grid>
+
             <TextBlock x:Name="TitleText"
                        FontSize="18"
                        FontWeight="SemiBold"
@@ -193,8 +266,8 @@
             
             <Border x:Name="PickupCodePanel" Visibility="Collapsed"
                     Margin="0,14,0,0"
-                    Background="#FFFF6900"
-                    CornerRadius="14"
+                    Background="{DynamicResource ToastAccentBrush}"
+                    CornerRadius="16"
                     Padding="16,12,16,12">
                 <StackPanel HorizontalAlignment="Center">
                     <TextBlock Text="取餐码"
@@ -223,7 +296,7 @@
                     <TextBlock x:Name="StageLabelText"
                                FontSize="12"
                                FontWeight="Medium"
-                               Foreground="#FFFF6900"/>
+                               Foreground="{DynamicResource ToastAccentBrush}"/>
                     <TextBlock x:Name="ProgressPercentText"
                                Grid.Column="1"
                                FontSize="11"
@@ -253,9 +326,18 @@
                                 HorizontalAlignment="Center"
                                 Visibility="Collapsed"
                                 Click="MediaAction_Click" ToolTip="收藏">
-                            <TextBlock x:Name="MediaFavoriteGlyph"
-                                       Text="&#x2661;" FontSize="24"
-                                       FontFamily="Segoe UI Symbol, Segoe UI"/>
+                                    <!-- miuix Favorites / FavoritesFill：激活态由代码切 Data -->
+                                    <Viewbox Width="20" Height="20">
+                                        <Canvas Width="1306.8" Height="1306.8">
+                                            <Path x:Name="MediaFavoriteGlyph"
+                                                  Data="F1 M 680.9,1071.9 L 675.9,1067.9 L 664.9,1056.9 Q 652.9,1044.9 641.9,1056.9 Q 634.9,1064.9 625.9,1071.9 Q 583.9,1105.9 532.4,1124.9 Q 480.9,1143.9 424.9,1143.9 Q 338.9,1143.9 266.4,1101.9 Q 193.9,1059.9 151.4,987.9 Q 108.9,915.9 108.9,829.9 Q 108.9,739.9 155.9,664.9 Q 211.9,569.9 339.4,440.9 Q 466.9,311.9 596.9,196.9 Q 609.9,184.9 619.9,177.4 Q 629.9,169.9 637.9,167.9 Q 654.9,162.9 670.9,167.9 Q 677.9,169.9 688.4,177.9 Q 698.9,185.9 711.9,197.9 Q 835.9,308.9 958.9,431.9 Q 1081.9,554.9 1143.9,651.9 Q 1197.9,730.9 1197.9,829.9 Q 1197.9,915.9 1155.4,987.9 Q 1112.9,1059.9 1040.9,1101.9 Q 968.9,1143.9 882.9,1143.9 Q 826.9,1143.9 774.9,1124.9 Q 722.9,1105.9 680.9,1071.9 Z M 1111.9,829.9 Q 1111.9,758.9 1072.9,699.9 Q 1025.9,627.9 940.9,538.4 Q 855.9,448.9 791.9,387.9 Q 730.9,329.9 668.9,274.9 Q 658.9,265.9 653.9,265.9 Q 648.9,265.9 638.9,274.9 Q 571.9,334.9 506.9,396.9 Q 291.9,601.9 228.9,710.9 Q 208.9,743.9 202.4,770.9 Q 195.9,797.9 195.9,829.9 Q 195.9,891.9 226.4,944.4 Q 256.9,996.9 309.9,1027.4 Q 362.9,1057.9 424.9,1057.9 Q 472.9,1057.9 515.9,1038.9 Q 558.9,1019.9 590.9,985.9 Q 603.9,971.9 613.9,962.4 Q 623.9,952.9 631.9,949.9 Q 653.9,940.9 675.9,949.9 Q 683.9,953.9 693.9,962.9 Q 703.9,971.9 716.9,985.9 Q 747.9,1019.9 791.4,1038.9 Q 834.9,1057.9 882.9,1057.9 Q 944.9,1057.9 997.9,1027.4 Q 1050.9,996.9 1081.4,944.4 Q 1111.9,891.9 1111.9,829.9 Z"
+                                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                                <Path.RenderTransform>
+                                                    <MatrixTransform Matrix="1,0,0,-1,0,1306.8"/>
+                                                </Path.RenderTransform>
+                                            </Path>
+                                        </Canvas>
+                                    </Viewbox>
                         </Button>
 
                         <!-- 上一曲 -->
@@ -276,9 +358,29 @@
                                 HorizontalAlignment="Center"
                                 Visibility="Collapsed"
                                 Click="MediaAction_Click" ToolTip="播放/暂停">
-                            <TextBlock x:Name="MediaPlayPauseGlyph"
-                                       Text="&#x23F8;" FontSize="28"
-                                       FontFamily="Segoe UI Symbol, Segoe UI"/>
+                                    <!-- miuix Play / Pause：按播放状态切换可见性（见代码） -->
+                                    <Grid>
+                                        <Viewbox x:Name="MediaPlayIcon" Width="24" Height="24">
+                                            <Canvas Width="1168.8" Height="1168.8">
+                                                <Path Data="F1 M 419.9,161.4 L 878.9,427.4 Q 944.9,465.4 971.9,485.4 Q 998.9,505.4 1010.9,532.4 Q 1021.9,557.4 1021.9,585.4 Q 1021.9,613.4 1010.9,638.4 Q 998.9,664.4 971.9,684.9 Q 944.9,705.4 878.9,742.4 L 419.9,1008.4 Q 357.9,1044.4 324.9,1057.9 Q 291.9,1071.4 263.9,1068.4 Q 236.9,1066.4 212.9,1052.9 Q 188.9,1039.4 171.9,1016.4 Q 154.9,994.4 150.9,960.9 Q 146.9,927.4 146.9,851.4 V 320.4 Q 146.9,242.4 150.4,209.4 Q 153.9,176.4 170.9,152.4 Q 187.9,130.4 212.4,116.4 Q 236.9,102.4 262.9,100.4 Q 291.9,97.4 324.4,110.9 Q 356.9,124.4 419.9,161.4 Z M 244.9,205.4 Q 239.9,212.4 238.4,235.9 Q 236.9,259.4 236.9,320.4 V 851.4 Q 236.9,910.4 238.4,932.4 Q 239.9,954.4 243.9,961.4 Q 248.9,968.4 256.4,973.4 Q 263.9,978.4 272.9,979.4 Q 279.9,980.4 301.9,969.4 Q 323.9,958.4 373.9,930.4 L 834.9,664.4 Q 881.9,637.4 901.4,623.9 Q 920.9,610.4 925.9,602.4 Q 935.9,586.4 927.9,568.4 Q 923.9,560.4 904.4,546.9 Q 884.9,533.4 834.9,505.4 L 373.9,239.4 Q 321.9,209.4 301.9,199.4 Q 281.9,189.4 272.9,190.4 Q 253.9,192.4 244.9,205.4 Z"
+                                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                                    <Path.RenderTransform>
+                                                        <MatrixTransform Matrix="1,0,0,-1,0,1168.8"/>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Canvas>
+                                        </Viewbox>
+                                        <Viewbox x:Name="MediaPauseIcon" Width="24" Height="24" Visibility="Collapsed">
+                                            <Canvas Width="1134.0" Height="1134.0">
+                                                <Path Data="F1 M 892.5,124.5 V 1009.5 Q 892.5,1023.5 884.5,1031.5 Q 876.5,1039.5 862.5,1039.5 H 832.5 Q 818.5,1039.5 810.5,1031.5 Q 802.5,1023.5 802.5,1009.5 V 124.5 Q 802.5,110.5 810.5,102.5 Q 818.5,94.5 832.5,94.5 H 862.5 Q 876.5,94.5 884.5,102.5 Q 892.5,110.5 892.5,124.5 Z M 331.5,124.5 V 1009.5 Q 331.5,1023.5 323.5,1031.5 Q 315.5,1039.5 301.5,1039.5 H 271.5 Q 257.5,1039.5 249.5,1031.5 Q 241.5,1023.5 241.5,1009.5 V 124.5 Q 241.5,110.5 249.5,102.5 Q 257.5,94.5 271.5,94.5 H 301.5 Q 315.5,94.5 323.5,102.5 Q 331.5,110.5 331.5,124.5 Z"
+                                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                                    <Path.RenderTransform>
+                                                        <MatrixTransform Matrix="1,0,0,-1,0,1134.0"/>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Canvas>
+                                        </Viewbox>
+                                    </Grid>
                         </Button>
 
                         <!-- 下一曲 -->
@@ -306,7 +408,7 @@
                                 <!-- 激活态右下角对勾角标 -->
                                 <Border x:Name="LyricCheckBadge"
                                         Width="14" Height="14" CornerRadius="7"
-                                        Background="#FFFF6900"
+                                        Background="{DynamicResource ToastAccentBrush}"
                                         HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                         Margin="0,0,-4,-4"
                                         Visibility="Collapsed">
@@ -330,10 +432,10 @@
                                    Foreground="#FF86868B"
                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
                         <Grid Grid.Column="1" VerticalAlignment="Center">
-                            <Border x:Name="MediaTrack" Height="4" CornerRadius="2"
-                                    Background="#FFD1D1D6" ClipToBounds="True">
-                                <Border x:Name="MediaFill" Height="4" CornerRadius="2"
-                                        Background="#FFFF6900"
+                            <Border x:Name="MediaTrack" Height="8" CornerRadius="4"
+                                    Background="{DynamicResource ToastTrackBrush}" ClipToBounds="True">
+                                <Border x:Name="MediaFill" Height="8" CornerRadius="4"
+                                        Background="{DynamicResource ToastAccentBrush}"
                                         RenderTransformOrigin="0,0.5">
                                     <Border.RenderTransform>
                                         <ScaleTransform x:Name="MediaFillScale" ScaleX="0"/>

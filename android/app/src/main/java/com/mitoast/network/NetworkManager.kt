@@ -235,6 +235,11 @@ object NetworkManager {
         wsServer?.broadcastDndStatus(enabled)
     }
 
+    /** WS 服务端在客户端完成认证/断开时回调，让"已连接电脑 N 台"实时变化（不必等下一条通知广播才刷新）。 */
+    fun onClientCountChanged(count: Int) {
+        connectedClients = count
+    }
+
     fun updateStatus() {
         connectedClients = if (isRunning) wsServer?.getConnectedCount() ?: 0 else 0
         try {

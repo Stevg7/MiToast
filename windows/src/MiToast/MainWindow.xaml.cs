@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using MiToast.Models;
 using MiToast.Network;
 using MiToast.Services;
@@ -21,19 +22,51 @@ public partial class MainWindow : Window
     private const int AutoDismissMs = 9000;
 
     private readonly Dictionary<string, MiFocusNotification> _activeByKey = new();
+    // 空闲内存回收：最后一张卡片关闭 30 秒后做一次压缩 GC 并把工作集还给系统
+    private readonly DispatcherTimer _idleTrimTimer;
     private readonly Dictionary<string, CancellationTokenSource> _dismissCts = new();
+
+    /// <summary>上一次 ApplySettings 时的音乐常驻开关，用于识别"刚取消常驻"这一次变化。</summary>
+    private bool _musicPersistentApplied;
 
     private WinForms.NotifyIcon? _trayIcon;
 
     public MainWindow()
     {
         InitializeComponent();
+        _musicPersistentApplied = Settings.MusicPersistent;
         NetworkManager.Instance.NotificationReceived += OnNotificationReceived;
         NetworkManager.Instance.NotificationCleared += OnNotificationCleared;
         NetworkManager.Instance.StatusChanged += OnConnectionStatusChanged;
         NetworkManager.Instance.HintRequested += OnConnectionHint;
         Loaded += MainWindow_Loaded;
         AppSettings.Instance.Changed += (_, _) => Dispatcher.Invoke(ApplySettings);
+
+        // 空闲 30 秒回收：启动 JIT 稳定后先收一次；此后每张卡片关闭都会重排，
+        // 只有全部关干净且无人打扰 30 秒才真正执行（有卡片在屏时不做）
+        _idleTrimTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _idleTrimTimer.Tick += (_, _) =>
+        {
+            _idleTrimTimer.Stop();
+            if (_activeByKey.Count == 0)
+            {
+                MemoryTrim.TrimNow();
+            }
+        };
+
+        // 周期兜底：长期空闲时零星后台活动（WebSocket 心跳、状态刷新）会重新撑高工作集。
+        // 无条件回收——常驻媒体卡在屏时也裁：静态卡片不重绘，被裁掉的页只有交互瞬间
+        // 缺页回来（毫秒级），换来的是常驻占用稳定贴着基线
+        var periodicTrim = new DispatcherTimer { Interval = TimeSpan.FromMinutes(10) };
+        periodicTrim.Tick += (_, _) => ScheduleIdleTrim();
+        periodicTrim.Start();
+    }
+
+    /// <summary>重排空闲回收计时（卡片关闭、启动就绪时调用；30 秒无卡片才真正回收）。</summary>
+    private void ScheduleIdleTrim()
+    {
+        _idleTrimTimer.Stop();
+        _idleTrimTimer.Start();
     }
 
     private static AppSettings Settings => AppSettings.Instance;
@@ -47,6 +80,7 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         ApplySettings();
+        ScheduleIdleTrim(); // 启动 JIT 稳定后收一次工作集
         InitializeTrayIcon();
         StartFullscreenWatcher();
         UpdateTrayStatus();
@@ -80,13 +114,16 @@ public partial class MainWindow : Window
     private void OnConnectionStatusChanged(object? sender, string status) => Dispatcher.Invoke(UpdateTrayStatus);
 
     /// <summary>长时间连不上手机时弹一次气泡提示（校园网屏蔽广播等场景下的引导）。</summary>
-    private void OnConnectionHint(object? sender, string hint)
+    private void OnConnectionHint(object? sender, ConnectionHint hint)
     {
         Dispatcher.Invoke(() =>
         {
             if (_trayIcon == null) return;
-            _trayIcon.BalloonTipTitle = "MiToast 没找到手机";
-            _trayIcon.BalloonTipText = hint;
+            // 弹之前再确认一次：提示从后台线程排队到 UI 线程期间可能刚刚连上手机，
+            // 这时候再弹"没找到手机"就是误报。
+            if (NetworkManager.Instance.IsConnected) return;
+            _trayIcon.BalloonTipTitle = hint.Title;
+            _trayIcon.BalloonTipText = hint.Text;
             _trayIcon.ShowBalloonTip(10000);
         });
     }
@@ -106,6 +143,13 @@ public partial class MainWindow : Window
         Width = workArea.Width;
         Height = workArea.Height;
 
+        // 刚取消音乐常驻：屏幕上正显示的媒体卡片直接移出屏幕。这里不能只"补建计时器"——
+        // 手机端的媒体通知在播放/暂停时都带 ongoing 标记（不可划掉），卡片会一直留在桌面上，
+        // 直到手机把媒体通知划掉；暂停状态下这件事可能永远不会发生。
+        bool pinTurnedOff = _musicPersistentApplied && !Settings.MusicPersistent;
+        _musicPersistentApplied = Settings.MusicPersistent;
+        List<string>? unpinnedMedia = pinTurnedOff ? new List<string>() : null;
+
         foreach (var kvp in _activeByKey)
         {
             kvp.Value.Width = Settings.CardWidth;
@@ -113,19 +157,28 @@ public partial class MainWindow : Window
             kvp.Value.ApplyDensity();
 
             // 音乐常驻开关变化时同步自动消失计时器：
-            // 常驻媒体卡取消计时；非驻留的非持续通知在缺失计时器时补建。
-            bool pinned = Settings.MusicPersistent && kvp.Value.IsMediaCard;
-            if (pinned)
+            // 常驻媒体卡取消计时；其余卡片在缺失计时器时补建（已有倒计时不重置，
+            // 否则改一次设置就等于给所有卡片续一次命）。
+            if (IsPinnedMedia(kvp.Value.Message))
             {
-                if (_dismissCts.TryGetValue(kvp.Key, out var cts))
-                {
-                    try { cts.Cancel(); } catch { }
-                    _dismissCts.Remove(kvp.Key);
-                }
+                CancelAutoDismiss(kvp.Key);
             }
-            else if (!kvp.Value.Message.IsOngoing && !_dismissCts.ContainsKey(kvp.Key))
+            else if (unpinnedMedia != null && kvp.Value.IsMediaCard)
+            {
+                unpinnedMedia.Add(kvp.Key);
+            }
+            else if (NeedsAutoDismiss(kvp.Value.Message) && !_dismissCts.ContainsKey(kvp.Key))
             {
                 StartAutoDismiss(kvp.Key);
+            }
+        }
+
+        // DismissByKey 会改动 _activeByKey，遍历结束后再统一移除
+        if (unpinnedMedia != null)
+        {
+            foreach (string key in unpinnedMedia)
+            {
+                DismissByKey(key);
             }
         }
 
@@ -140,12 +193,18 @@ public partial class MainWindow : Window
             int style = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, style | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
 
-            // 跨显示器 DPI 变化后，命中区域的设备像素坐标需要重建
+            // 跨显示器 DPI 变化后，命中区域的设备像素坐标需要重建；
+            // 宿主几何与卡片堆叠也要重新贴齐工作区（WPF 会按新 DPI 重缩放窗口，
+            // 拔插显示器后窗口还可能被系统挪回可见区，二者都偏离 ApplySettings 的落位）
             var source = HwndSource.FromHwnd(hwnd);
             if (source != null)
             {
                 source.AddHook(WndProc);
-                source.DpiChanged += (_, _) => Dispatcher.Invoke(ScheduleRegionUpdate);
+                source.DpiChanged += (_, _) =>
+                {
+                    Dispatcher.Invoke(ScheduleRegionUpdate);
+                    ScheduleDisplayReapply();
+                };
             }
         }
         catch
@@ -159,15 +218,9 @@ public partial class MainWindow : Window
         {
             HistoryService.Instance.Add(message);
 
-            bool suppress = false;
-            if (Settings.DndMode == "pc")
-            {
-                suppress = true;
-            }
-            else if (Settings.DndMode == "sync" && NetworkManager.Instance.PhoneDndEnabled)
-            {
-                suppress = true;
-            }
+            // 勿扰：手动开关，或已开启「同步手机端勿扰」且手机正处于勿扰
+            bool suppress = Settings.DndEnabled
+                || (Settings.DndSyncPhone && NetworkManager.Instance.PhoneDndEnabled);
 
             if (suppress) return;
             ShowOrUpdateNotification(message);
@@ -181,8 +234,8 @@ public partial class MainWindow : Window
         {
             // 音乐常驻模式下，媒体卡片忽略手机端的清除（音乐 App 被杀/通知被划掉），
             // 只有用户手动点卡片关闭按钮（DismissRequested → DismissByKey）才会移除。
-            if (_activeByKey.TryGetValue(key, out var card)
-                && AppSettings.Instance.MusicPersistent && card.IsMediaCard)
+            // 未开启常驻时媒体卡片与其他通知一样，跟着手机端清除一起消失。
+            if (_activeByKey.TryGetValue(key, out var card) && IsPinnedMedia(card.Message))
             {
                 return;
             }
@@ -194,6 +247,15 @@ public partial class MainWindow : Window
     private static bool IsPinnedMedia(NotificationMessage message)
         => AppSettings.Instance.MusicPersistent && message.MediaActions is { Count: > 0 };
 
+    /// <summary>
+    /// 是否给卡片挂自动消失计时器。false 表示卡片常驻，只能手动关闭或等手机端清除通知。
+    /// 非媒体通知沿用手机端的 ongoing 标记（下载、导航等持续通知不消失）；
+    /// 媒体通知不常驻时不再看 ongoing——播放/暂停中的媒体通知在手机端一律不可划掉，
+    /// 按 ongoing 处理会让"取消常驻"后的音乐卡片永久停留在屏幕上。
+    /// </summary>
+    private static bool NeedsAutoDismiss(NotificationMessage message)
+        => message.MediaActions is { Count: > 0 } ? !IsPinnedMedia(message) : !message.IsOngoing;
+
     private void ShowOrUpdateNotification(NotificationMessage message)
     {
         string key = message.Key.Length > 0 ? message.Key : message.Id;
@@ -203,7 +265,7 @@ public partial class MainWindow : Window
             existing.UpdateFrom(message);
             existing.Width = Settings.CardWidth;
             RecalculateOffsets();
-            ResetAutoDismiss(key, message.IsOngoing || IsPinnedMedia(message));
+            ResetAutoDismiss(key, persistent: !NeedsAutoDismiss(message));
             return;
         }
 
@@ -227,7 +289,7 @@ public partial class MainWindow : Window
 
         RecalculateOffsets();
 
-        if (!message.IsOngoing && !IsPinnedMedia(message))
+        if (NeedsAutoDismiss(message))
         {
             StartAutoDismiss(key);
         }
@@ -387,9 +449,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 每拍轮询前台窗口：若前台应用真全屏（几何覆盖宿主所在显示器整屏），
-    /// 将宿主降到窗口 Z 序底部并去掉 Topmost——卡片被全屏画面盖住即等效不显示；
-    /// 退出全屏后恢复 Topmost 并把宿主抬回最上层，保证其余时刻卡片始终浮在屏幕最顶。
+    /// 每拍轮询前台窗口并把宿主钉在期望的 Z 序位置：真全屏（无边框铺满宿主所在
+    /// 显示器）时降到 Z 序底部并去掉 Topmost——卡片被全屏画面盖住即等效不显示；
+    /// 其余时刻保持置顶并在置顶层里最上，被别的置顶窗口（任务栏、别家置顶工具）
+    /// 压住后最迟一个轮询间隔自动回到最上层。
     /// </summary>
     private void FullscreenPollTick()
     {
@@ -401,34 +464,28 @@ public partial class MainWindow : Window
             {
                 _foregroundFullscreen = vote;
                 _fullscreenVoteStreak = 0;
-                ApplyFullscreenState();
             }
-            return;
         }
-        _prevFullscreenVote = vote;
-        _fullscreenVoteStreak = 1;
-    }
+        else
+        {
+            _prevFullscreenVote = vote;
+            _fullscreenVoteStreak = 1;
+        }
 
-    private void ApplyFullscreenState()
-    {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero) return;
-
         try
         {
             if (_foregroundFullscreen)
             {
-                // 去 Topmost 并压到 Z 序最底：无论独占/无边框全屏都能被盖住
+                // 去 Topmost 并压到 Z 序最底：无论独占/无边框全屏都能被盖住（每拍钉一次，幂等）
                 Topmost = false;
                 SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0,
                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
             else
             {
-                // 恢复最上层（不抢焦点，保持 NOACTIVATE）
-                Topmost = true;
-                SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                EnsureTopmost(hwnd);
             }
         }
         catch
@@ -437,9 +494,64 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// 判定前台窗口是否为真全屏：窗口可见、未最小化、且矩形覆盖宿主所在显示器
-    /// 的整块区域（rcMonitor，含任务栏带）。仅最大化到工作区不算全屏。
-    /// 容差吸收 DWM 外扩边框与取整误差。
+    /// 让宿主保持在置顶层最上，且只在真的被压住时才动手：掉出置顶层，或有外人的
+    /// 置顶窗口（任务栏、别家置顶工具）盖在上面。已在理想位置时零动作——自家的
+    /// ToolTip、托盘菜单这些置顶弹出压在卡片上方属于正常状态，绝不能被压回。
+    /// 动手时先抬宿主，再把自家置顶弹出按原相对次序压回宿主之上。
+    /// </summary>
+    private void EnsureTopmost(IntPtr hwnd)
+    {
+        bool inTopmostBand = (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
+        bool covered = false;
+        if (inTopmostBand)
+        {
+            // Z 序里置顶层恒排在普通层之上，宿主上方只可能是置顶窗口；
+            // 本进程的弹出（ToolTip/托盘菜单）压在上方不算被压住，外人才算
+            for (var h = GetWindow(hwnd, GW_HWNDPREV); h != IntPtr.Zero; h = GetWindow(h, GW_HWNDPREV))
+            {
+                if (!IsOwnProcessWindow(h))
+                {
+                    covered = true;
+                    break;
+                }
+            }
+        }
+        if (inTopmostBand && !covered) return;
+
+        // 抬回置顶层最上（不抢焦点，保持 NOACTIVATE）
+        Topmost = true;
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+        // 自家置顶弹出（ToolTip / 托盘菜单）自下而上重新压到顶，相对次序不变
+        var popups = new List<IntPtr>();
+        for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero; h = GetWindow(h, GW_HWNDNEXT))
+        {
+            if (h == hwnd) continue;
+            if ((GetWindowLong(h, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0 &&
+                IsWindowVisible(h) && IsOwnProcessWindow(h))
+            {
+                popups.Add(h);
+            }
+        }
+        for (int i = popups.Count - 1; i >= 0; i--)
+        {
+            SetWindowPos(popups[i], HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    }
+
+    private static bool IsOwnProcessWindow(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        return pid == (uint)Environment.ProcessId;
+    }
+
+    /// <summary>
+    /// 判定前台窗口是否为真全屏：窗口可见、未最小化、无标题栏（无边框铺满的
+    /// 视频/游戏），且矩形覆盖宿主所在显示器的整块区域（rcMonitor，含任务栏带）。
+    /// 最大化窗口（含盖住自动隐藏任务栏的场景）不算全屏。容差吸收 DWM 外扩
+    /// 边框与取整误差。
     /// </summary>
     private bool IsForegroundWindowFullscreen()
     {
@@ -450,6 +562,14 @@ public partial class MainWindow : Window
         if (fg == host) return false;
         if (!IsWindowVisible(fg)) return false;
         if (IsIconic(fg)) return false;
+
+        // 最大化窗口不算全屏：自动隐藏任务栏时最大化窗口的矩形同样铺满显示器，
+        // 但那是普通用法，卡片要照常置顶——只有真全屏（视频/游戏）才让位
+        if (IsZoomed(fg)) return false;
+        // 有标题栏（WS_CAPTION）样式位的窗口不算全屏：视频网站全屏、F11、
+        // 播放器/游戏的无边框铺满都没有标题栏；普通窗口哪怕手动拉满整个
+        // 屏幕也保留标题栏样式位
+        if (((uint)GetWindowLong(fg, GWL_STYLE) & WS_CAPTION) != 0) return false;
 
         IntPtr hostMon = MonitorFromWindow(host, MONITOR_DEFAULTTONEAREST);
         if (hostMon == IntPtr.Zero) return false;
@@ -547,8 +667,38 @@ public partial class MainWindow : Window
         }
     }
 
+    private System.Windows.Threading.DispatcherTimer? _displayChangeTimer;
+
+    /// <summary>
+    /// 显示器拓扑 / 工作区 / DPI 变化（拔插显示器、改分辨率、切主屏、任务栏移动）后，
+    /// 重新贴齐宿主窗口并重排卡片。系统把搁浅窗口挪回可见区、WPF 按新 DPI 重缩放
+    /// 几何、SystemParameters 工作区缓存失效，这些都异步进行且顺序不保证——
+    /// 去抖合并到静默 400ms 后统一重跑一次 ApplySettings，读到的就是稳定值。
+    /// ApplySettings 是幂等落位，重复执行无副作用。
+    /// </summary>
+    private void ScheduleDisplayReapply()
+    {
+        if (_displayChangeTimer == null)
+        {
+            _displayChangeTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(400)
+            };
+            _displayChangeTimer.Tick += (_, _) =>
+            {
+                _displayChangeTimer.Stop();
+                ApplySettings();
+            };
+        }
+        // 静默期重置：一条广播链（拔屏会连发 DISPLAYCHANGE/SETTINGCHANGE/DPICHANGED）只触发一次重排
+        _displayChangeTimer.Stop();
+        _displayChangeTimer.Start();
+    }
+
     private const int WM_NCHITTEST = 0x0084;
     private const int HTTRANSPARENT = -1;
+    private const int WM_SETTINGCHANGE = 0x001A;
+    private const int WM_DISPLAYCHANGE = 0x007E;
 
     /// <summary>
     /// 兜底命中测试：阴影/缝隙的穿透主要由 SetWindowRgn 的紧贴区域在 Win32 层完成
@@ -569,6 +719,11 @@ public partial class MainWindow : Window
                 handled = true;
                 return new IntPtr(HTTRANSPARENT);
             }
+        }
+        else if (msg == WM_DISPLAYCHANGE || msg == WM_SETTINGCHANGE)
+        {
+            // 显示器拔插/分辨率/主屏切换（DISPLAYCHANGE）、任务栏移动等工作区变化（SETTINGCHANGE）
+            ScheduleDisplayReapply();
         }
         return IntPtr.Zero;
     }
@@ -601,23 +756,33 @@ public partial class MainWindow : Window
 
     private void StartAutoDismiss(string key)
     {
-        ResetAutoDismiss(key, isOngoing: false);
+        ResetAutoDismiss(key, persistent: false);
     }
 
-    private void ResetAutoDismiss(string key, bool isOngoing)
+    /// <summary>
+    /// 重置自动消失计时器（卡片内容更新即重新计时）；persistent 为真时取消计时，
+    /// 卡片转为常驻，只能手动关闭或等手机端清除通知。
+    /// </summary>
+    private void ResetAutoDismiss(string key, bool persistent)
     {
-        if (_dismissCts.TryGetValue(key, out var oldCts))
-        {
-            try { oldCts.Cancel(); } catch { }
-            _dismissCts.Remove(key);
-        }
+        CancelAutoDismiss(key);
 
-        if (isOngoing) return;
+        if (persistent) return;
 
         var cts = new CancellationTokenSource();
         _dismissCts[key] = cts;
 
         _ = RunAutoDismissAsync(key, cts.Token);
+    }
+
+    /// <summary>取消自动消失计时器（卡片转为常驻，或即将被移除）。</summary>
+    private void CancelAutoDismiss(string key)
+    {
+        if (_dismissCts.TryGetValue(key, out var cts))
+        {
+            try { cts.Cancel(); } catch { }
+            _dismissCts.Remove(key);
+        }
     }
 
     private async System.Threading.Tasks.Task RunAutoDismissAsync(string key, CancellationToken token)
@@ -638,11 +803,7 @@ public partial class MainWindow : Window
     {
         if (!_activeByKey.TryGetValue(key, out var notification)) return;
 
-        if (_dismissCts.TryGetValue(key, out var cts))
-        {
-            try { cts.Cancel(); } catch { }
-            _dismissCts.Remove(key);
-        }
+        CancelAutoDismiss(key);
 
         _activeByKey.Remove(key);
         notification.PlayHideAnimation((_, _) =>
@@ -651,6 +812,7 @@ public partial class MainWindow : Window
             {
                 NotificationHost.Children.Remove(notification);
                 RecalculateOffsets();
+                ScheduleIdleTrim(); // 最后一张卡关掉 30 秒后回收内存
             });
         });
     }
@@ -712,6 +874,20 @@ public partial class MainWindow : Window
         menu.VerticalOffset = y;
 
         menu.IsOpen = true;
+
+        // 菜单弹出要压在通知卡片（Topmost）之上：打开后钉到置顶层最上。
+        // EnsureTopmost 会把自家置顶弹出保护在宿主上方，不会被卡片压回。
+        try
+        {
+            if (PresentationSource.FromVisual(menu) is HwndSource menuSrc && menuSrc.Handle != IntPtr.Zero)
+            {
+                SetWindowPos(menuSrc.Handle, HWND_TOPMOST, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private static MenuItem? FindMenuItem(ContextMenu menu, string tag)
@@ -733,7 +909,7 @@ public partial class MainWindow : Window
         if (FindMenuItem(menu, "musicpin") is { } pinItem)
             pinItem.IsChecked = Settings.MusicPersistent;
         if (FindMenuItem(menu, "dnd") is { } dndItem)
-            dndItem.IsChecked = Settings.DndMode == "pc";
+            dndItem.IsChecked = Settings.DndEnabled;
         if (FindMenuItem(menu, "status") is { } statusItem)
             statusItem.Header = NetworkManager.Instance.StatusText;
     }
@@ -765,7 +941,7 @@ public partial class MainWindow : Window
     private void TraySettings_Click(object sender, RoutedEventArgs e)
         => SettingsWindow.ShowSingleton();
 
-    /// <summary>立刻重新搜索手机（放弃当前退避等待，掐断现有连接重连）。</summary>
+    /// <summary>立刻重新搜索手机（放弃当前退避等待）。已连接时先探测现有连接，只刷新状态，不掐断健康连接。</summary>
     private void TrayRescan_Click(object sender, RoutedEventArgs e)
     {
         NetworkManager.Instance.Reconnect();
@@ -797,8 +973,8 @@ public partial class MainWindow : Window
     {
         if (sender is MenuItem mi)
         {
-            Settings.DndMode = mi.IsChecked ? "pc" : "off";
-            Settings.Save();
+            Settings.DndEnabled = mi.IsChecked;
+            Settings.Save(); // 触发 Changed，设置窗口的开关实时跟上
         }
     }
 
@@ -903,6 +1079,19 @@ public partial class MainWindow : Window
     private static extern bool IsIconic(IntPtr hWnd);
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool IsZoomed(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetTopWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -942,4 +1131,9 @@ public partial class MainWindow : Window
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int WS_EX_NOACTIVATE = 0x08000000;
+    private const int GWL_STYLE = -16;
+    private const int WS_EX_TOPMOST = 0x00000008;
+    private const uint WS_CAPTION = 0x00C00000;
+    private const uint GW_HWNDPREV = 3;
+    private const uint GW_HWNDNEXT = 2;
 }

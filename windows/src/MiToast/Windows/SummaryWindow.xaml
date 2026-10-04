@@ -1,0 +1,194 @@
+<Window x:Class="MiToast.SummaryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="通知总结"
+        Height="660"
+        Width="920"
+        MinWidth="680"
+        MinHeight="460"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        FontFamily="{StaticResource UiFontFamily}"
+        Background="{DynamicResource PageBgBrush}">
+
+    <!-- 与历史通知窗口同一套自绘标题栏做法（见 HistoryWindow.xaml 注释） -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="48"
+                            ResizeBorderThickness="6"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Background="Transparent">
+            <TextBlock Text="MiToast 通知总结"
+                       FontSize="12"
+                       Margin="16,0,0,0"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal">
+                <Button Style="{StaticResource CaptionButton}" Click="MinimizeButton_Click"
+                        AutomationProperties.Name="最小化">
+                    <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets, Segoe Fluent Icons" FontSize="10"/>
+                </Button>
+                <Button Style="{StaticResource CaptionButton}" Click="MaximizeButton_Click"
+                        AutomationProperties.Name="最大化">
+                    <TextBlock x:Name="MaximizeGlyph" Text="&#xE922;"
+                               FontFamily="Segoe MDL2 Assets, Segoe Fluent Icons" FontSize="10"/>
+                </Button>
+                <Button x:Name="CloseButton" Style="{StaticResource CaptionCloseButton}" Click="CloseButton_Click"
+                        AutomationProperties.Name="关闭">
+                    <Viewbox Width="11" Height="11">
+                        <Canvas Width="1047.6" Height="1047.6">
+                            <Path Data="F1 M 523.8,593.3 L 832.7,903.9 Q 845.0,916.5 857.1,916.3 Q 869.2,916.2 881.2,903.9 L 897.5,887.6 Q 909.6,875.6 909.7,863.8 Q 909.9,852.0 897.5,839.1 L 588.6,528.4 L 898.8,218.3 Q 911.0,206.6 911.3,194.8 Q 911.7,182.9 898.8,170.5 L 881.0,152.7 Q 858.2,129.9 833.6,153.8 L 523.8,463.6 L 213.1,154.7 Q 201.5,142.7 189.2,142.5 Q 177.0,142.3 164.6,154.7 L 148.6,171.0 Q 136.3,182.7 136.3,194.9 Q 136.3,207.1 148.2,219.2 L 458.9,528.4 L 149.1,839.1 Q 137.1,852.0 137.1,863.8 Q 137.1,875.6 149.1,887.6 L 165.5,903.9 Q 178.4,916.5 190.0,916.5 Q 201.6,916.5 214.0,903.9 Z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                <Path.RenderTransform>
+                                    <MatrixTransform Matrix="1,0,0,-1,0,1047.6"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Canvas>
+                    </Viewbox>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="28,8,28,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Margin="0,0,0,16">
+                <TextBlock Text="通知总结"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Text="用本地大模型（CPU）把历史通知归纳成总结，全程离线、数据不出本机"
+                           FontSize="13"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- 工具行：范围 + 生成/取消 + 复制 + 删除 + 状态 -->
+            <Grid Grid.Row="1" Margin="0,0,0,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox x:Name="RangeCombo"
+                          Grid.Column="0"
+                          Style="{StaticResource ModernComboBox}"
+                          ItemContainerStyle="{StaticResource ModernComboBoxItem}"
+                          SelectedIndex="1"
+                          SelectionChanged="RangeCombo_SelectionChanged">
+                    <ComboBoxItem Content="最近 24 小时" Tag="24"/>
+                    <ComboBoxItem Content="最近 72 小时" Tag="72"/>
+                    <ComboBoxItem Content="最近 7 天" Tag="168"/>
+                </ComboBox>
+                <Button x:Name="GenerateButton"
+                        Grid.Column="1"
+                        Content="立即生成"
+                        Style="{StaticResource PrimaryButton}"
+                        Margin="12,0,0,0"
+                        Click="GenerateButton_Click"/>
+                <Button x:Name="CopyButton"
+                        Grid.Column="2"
+                        Content="复制 Markdown"
+                        Style="{StaticResource SecondaryButton}"
+                        Margin="10,0,0,0"
+                        Click="CopyButton_Click"/>
+                <Button x:Name="DeleteButton"
+                        Grid.Column="3"
+                        Content="删除"
+                        Style="{StaticResource DangerButton}"
+                        Margin="10,0,0,0"
+                        Click="DeleteButton_Click"/>
+                <TextBlock x:Name="StatusText"
+                           Grid.Column="4"
+                           VerticalAlignment="Center"
+                           Margin="16,0,0,0"
+                           FontSize="13"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
+            </Grid>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左：历史总结列表 -->
+                <ListBox x:Name="SummaryList"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectionChanged="SummaryList_SelectionChanged">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <ContentPresenter/>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource CardBgBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="14,12"
+                                    Margin="0,0,10,10">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding RangeText}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <TextBlock Text="{Binding GeneratedText}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        <TextBlock Text="{Binding TotalCount, StringFormat={}{0} 条通知}"
+                                                   FontSize="12"
+                                                   Margin="10,0,0,0"
+                                                   Foreground="{DynamicResource PrimaryBrush}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- 右：正文（轻量 Markdown 渲染） -->
+                <Border Grid.Column="1"
+                        Background="{DynamicResource CardBgBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Padding="22,18">
+                        <StackPanel x:Name="DetailPanel"/>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

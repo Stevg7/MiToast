@@ -40,24 +40,10 @@ public static class FluentWindow
         _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, sizeof(int));
     }
 
-    /// <summary>Fluent 风格页面背景：Mica 质感的微渐变（深色偏蓝黑、亮色近白）。</summary>
+    /// <summary>HyperOS 风格页面背景：纯色（浅色 #F7F7F7 页面底，深色纯黑，卡片浮在上面）。</summary>
     public static Brush CreatePageBrush(bool dark)
     {
-        var brush = new LinearGradientBrush
-        {
-            StartPoint = new System.Windows.Point(0, 0),
-            EndPoint = new System.Windows.Point(0, 1)
-        };
-        if (dark)
-        {
-            brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x2E, 0x2E, 0x32), 0));
-            brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x23, 0x23, 0x27), 1));
-        }
-        else
-        {
-            brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xF8, 0xF8, 0xFA), 0));
-            brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xF2, 0xF2, 0xF5), 1));
-        }
+        var brush = new SolidColorBrush(dark ? Color.FromRgb(0x00, 0x00, 0x00) : Color.FromRgb(0xF7, 0xF7, 0xF7));
         brush.Freeze();
         return brush;
     }

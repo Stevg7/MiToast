@@ -22,6 +22,9 @@ windows/*.zip
 *.pdb
 *.cache
 
+# ===== 个人数据（自动化生成） =====
+notification-summaries.md
+
 # ===== 系统 / 编辑器 =====
 .DS_Store
 Thumbs.db

@@ -12,4 +12,10 @@
     <Version>1.0.0</Version>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- DATAS（.NET 8 动态自适应应用大小）：托盘常驻、负载极小，让 GC 按需收缩堆，
+         空闲时提交内存贴着实际存活对象走，避免长期驻留多个大堆 -->
+    <RuntimeHostConfigurationOption Include="System.GC.DATAS" Value="true" />
+  </ItemGroup>
+
 </Project>

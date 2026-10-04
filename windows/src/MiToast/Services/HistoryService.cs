@@ -239,37 +239,17 @@ public class HistoryService
                 if (!_dirty) return;
                 _dirty = false;
 
-                // 复制一份并剥离图标，避免修改内存中的原始对象
-                snapshot = _items.Select(m => new NotificationMessage
-                {
-                    Type = m.Type,
-                    Id = m.Id,
-                    Key = m.Key,
-                    PackageName = m.PackageName,
-                    AppName = m.AppName,
-                    Title = m.Title,
-                    Content = m.Content,
-                    BigTitle = m.BigTitle,
-                    BigText = m.BigText,
-                    SubText = m.SubText,
-                    Ticker = m.Ticker,
-                    HintTitle = m.HintTitle,
-                    HintText = m.HintText,
-                    IconBase64 = string.Empty,
-                    Timestamp = m.Timestamp,
-                    Category = m.Category,
-                    IsOngoing = m.IsOngoing,
-                    GroupKey = m.GroupKey,
-                    PeopleCount = m.PeopleCount,
-                    Progress = m.Progress
-                }).ToList();
+                // 浅拷贝即可：条目在 Add 时已剥离图标且不可变，快照只保住列表边界
+                snapshot = new List<NotificationMessage>(_items);
             }
 
-            // 序列化 + 加密写文件在后台线程执行；_ioLock 防止防抖写入与退出 Flush 并发交错
+            // 直接序列化为 UTF-8 字节（不再经过整段 JSON 字符串），DPAPI 加密后写文件；
+            // _ioLock 防止防抖写入与退出 Flush 并发交错
             lock (_ioLock)
             {
                 Directory.CreateDirectory(ConfigDir);
-                SensitiveStorage.WriteHistoryText(HistoryPath, JsonSerializer.Serialize(snapshot));
+                var utf8 = JsonSerializer.SerializeToUtf8Bytes(snapshot);
+                SensitiveStorage.WriteHistoryBytes(HistoryPath, utf8);
             }
         }
         catch

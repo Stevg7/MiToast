@@ -100,8 +100,11 @@ public static class SensitiveStorage
         }
     }
 
-    /// <summary>读取历史通知文件：优先按 DPAPI 密文解密；解密失败时兼容旧版明文 JSON。</summary>
-    public static string? ReadHistoryText(string path)
+    /// <summary>
+    /// 读取受保护文件：优先按 DPAPI 密文解密；解密失败时兼容旧版明文 JSON。
+    /// 历史通知与本地总结共用此读写，仅是文件名不同。
+    /// </summary>
+    public static string? ReadProtectedText(string path)
     {
         try
         {
@@ -123,11 +126,17 @@ public static class SensitiveStorage
         }
     }
 
-    /// <summary>加密写入历史通知文件（DPAPI，当前用户作用域）。</summary>
-    public static void WriteHistoryText(string path, string json)
+    /// <summary>加密写入受保护文件（DPAPI，当前用户作用域）。接收 UTF-8 字节，省去整段 JSON 字符串的中转拷贝。</summary>
+    public static void WriteProtectedBytes(string path, byte[] data)
     {
-        var cipher = Protect(Encoding.UTF8.GetBytes(json));
+        var cipher = Protect(data);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, cipher);
     }
+
+    /// <summary>读取历史通知文件（DPAPI 加密，兼容旧版明文）。</summary>
+    public static string? ReadHistoryText(string path) => ReadProtectedText(path);
+
+    /// <summary>加密写入历史通知文件（DPAPI，当前用户作用域）。</summary>
+    public static void WriteHistoryBytes(string path, byte[] json) => WriteProtectedBytes(path, json);
 }

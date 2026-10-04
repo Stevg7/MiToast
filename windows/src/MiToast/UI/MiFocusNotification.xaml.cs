@@ -34,9 +34,26 @@ public partial class MiFocusNotification : UserControl
     // 收藏/歌词开关的本地视觉状态
     private bool _favoriteActive;
     private bool _lyricActive;
+
+    /// <summary>封面方块缩略态边长与下方留白；放大态边长 = 卡片内容宽。</summary>
+    private const double CompactCoverSize = 84;
+    private const double CoverBottomGap = 12;
+    private const double CoverCornerRadius = 16;
+    private bool _coverExpanded;
+    private bool _coverAnimRunning;
+
     private Brush? _themePrimaryBrush;
-    private static readonly Brush OrangeBrushStatic =
-        new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFF6900"));
+
+    /// <summary>HyperOS 主色（miuix 令牌）：浅 #3482FF / 深 #277AF7，按当前主题取值。</summary>
+    private static Color AccentColor => AppSettings.Instance.DarkMode
+        ? Color.FromRgb(0x27, 0x7A, 0xF7)
+        : Color.FromRgb(0x34, 0x82, 0xFF);
+
+    // 收藏两态几何（miuix Favorites / FavoritesFill Regular 轮廓；Compose 的 scaleY=-1 已烘焙进坐标）
+    private static readonly Geometry HeartOutlineGeometry = Geometry.Parse(
+        "F1 M 680.9,1071.9 L 675.9,1067.9 L 664.9,1056.9 Q 652.9,1044.9 641.9,1056.9 Q 634.9,1064.9 625.9,1071.9 Q 583.9,1105.9 532.4,1124.9 Q 480.9,1143.9 424.9,1143.9 Q 338.9,1143.9 266.4,1101.9 Q 193.9,1059.9 151.4,987.9 Q 108.9,915.9 108.9,829.9 Q 108.9,739.9 155.9,664.9 Q 211.9,569.9 339.4,440.9 Q 466.9,311.9 596.9,196.9 Q 609.9,184.9 619.9,177.4 Q 629.9,169.9 637.9,167.9 Q 654.9,162.9 670.9,167.9 Q 677.9,169.9 688.4,177.9 Q 698.9,185.9 711.9,197.9 Q 835.9,308.9 958.9,431.9 Q 1081.9,554.9 1143.9,651.9 Q 1197.9,730.9 1197.9,829.9 Q 1197.9,915.9 1155.4,987.9 Q 1112.9,1059.9 1040.9,1101.9 Q 968.9,1143.9 882.9,1143.9 Q 826.9,1143.9 774.9,1124.9 Q 722.9,1105.9 680.9,1071.9 Z M 1111.9,829.9 Q 1111.9,758.9 1072.9,699.9 Q 1025.9,627.9 940.9,538.4 Q 855.9,448.9 791.9,387.9 Q 730.9,329.9 668.9,274.9 Q 658.9,265.9 653.9,265.9 Q 648.9,265.9 638.9,274.9 Q 571.9,334.9 506.9,396.9 Q 291.9,601.9 228.9,710.9 Q 208.9,743.9 202.4,770.9 Q 195.9,797.9 195.9,829.9 Q 195.9,891.9 226.4,944.4 Q 256.9,996.9 309.9,1027.4 Q 362.9,1057.9 424.9,1057.9 Q 472.9,1057.9 515.9,1038.9 Q 558.9,1019.9 590.9,985.9 Q 603.9,971.9 613.9,962.4 Q 623.9,952.9 631.9,949.9 Q 653.9,940.9 675.9,949.9 Q 683.9,953.9 693.9,962.9 Q 703.9,971.9 716.9,985.9 Q 747.9,1019.9 791.4,1038.9 Q 834.9,1057.9 882.9,1057.9 Q 944.9,1057.9 997.9,1027.4 Q 1050.9,996.9 1081.4,944.4 Q 1111.9,891.9 1111.9,829.9 Z");
+    private static readonly Geometry HeartFilledGeometry = Geometry.Parse(
+        "F1 M 680.9,1071.9 L 675.9,1067.9 L 664.9,1056.9 Q 652.9,1044.9 641.9,1056.9 Q 634.9,1064.9 625.9,1071.9 Q 583.9,1105.9 532.4,1124.9 Q 480.9,1143.9 424.9,1143.9 Q 338.9,1143.9 266.4,1101.9 Q 193.9,1059.9 151.4,987.9 Q 108.9,915.9 108.9,829.9 Q 108.9,739.9 155.9,664.9 Q 211.9,569.9 339.4,440.9 Q 466.9,311.9 596.9,196.9 Q 609.9,184.9 619.9,177.4 Q 629.9,169.9 637.9,167.9 Q 654.9,162.9 670.9,167.9 Q 677.9,169.9 688.4,177.9 Q 698.9,185.9 711.9,197.9 Q 835.9,308.9 958.9,431.9 Q 1081.9,554.9 1143.9,651.9 Q 1197.9,730.9 1197.9,829.9 Q 1197.9,915.9 1155.4,987.9 Q 1112.9,1059.9 1040.9,1101.9 Q 968.9,1143.9 882.9,1143.9 Q 826.9,1143.9 774.9,1124.9 Q 722.9,1105.9 680.9,1071.9 Z");
 
     public MiFocusNotification(NotificationMessage message)
     {
@@ -77,6 +94,10 @@ public partial class MiFocusNotification : UserControl
         {
             // 外边距12 + 面板内边距(10+10) + 控制行40 + 间距10 + 进度行16
             h += 12 + 10 + 40 + 10 + 16 + 10;
+        }
+        if (CoverGrid.Visibility == Visibility.Visible)
+        {
+            h += (_coverExpanded ? ExpandedCoverSize() : CompactCoverSize) + CoverBottomGap;
         }
         return (int)Math.Ceiling(h + BaseVerticalPadding * 2 * density);
     }
@@ -144,7 +165,8 @@ public partial class MiFocusNotification : UserControl
 
         if (Message.Category == "pickup")
         {
-            string? pickupCode = ExtractPickupCode(Message);
+            // 提取逻辑在 NotificationText（UI 卡片、历史列表与本地总结共用）
+            string? pickupCode = NotificationText.ExtractPickupCode(Message);
             if (pickupCode != null)
             {
                 PickupCodeText.Text = pickupCode;
@@ -180,7 +202,7 @@ public partial class MiFocusNotification : UserControl
         // 短信/验证码类通知显示一键复制按钮（取餐码卡片除外，避免重复）
         if (PickupCodePanel.Visibility != Visibility.Visible)
         {
-            _verificationCode = ExtractVerificationCode(Message);
+            _verificationCode = NotificationText.ExtractVerificationCode(Message);
             if (_verificationCode != null)
             {
                 CopyCodeText.Text = "复制验证码";
@@ -214,6 +236,8 @@ public partial class MiFocusNotification : UserControl
         if (actions == null || actions.Count == 0)
         {
             MediaPanel.Visibility = Visibility.Collapsed;
+            CoverGrid.Visibility = Visibility.Collapsed;
+            _coverExpanded = false;
             _mediaSignature = null;
             StopMediaTick();
             return;
@@ -257,10 +281,102 @@ public partial class MiFocusNotification : UserControl
         }
 
         // 播放/暂停图标随状态更新（每次更新都刷新）
-        MediaPlayPauseGlyph.Text = Message.MediaIsPlaying ? "\u23F8" : "\u25B6";
+        // HyperOS 图标：播放/暂停两枚矢量按状态切换（miuix Play/Pause）
+        MediaPlayIcon.Visibility = Message.MediaIsPlaying ? Visibility.Collapsed : Visibility.Visible;
+        MediaPauseIcon.Visibility = Message.MediaIsPlaying ? Visibility.Visible : Visibility.Collapsed;
+
+        // 封面随媒体面板一起出现；仅在刚显示时落位尺寸，动画途中的高频更新不打断
+        if (CoverGrid.Visibility != Visibility.Visible)
+        {
+            CoverGrid.Visibility = Visibility.Visible;
+            ApplyCoverLayout(animate: false);
+        }
+        UpdateCoverToggleGlyph();
 
         MediaPanel.Visibility = Visibility.Visible;
         UpdateMediaProgress();
+    }
+
+    /// <summary>放大态封面边长 = 卡片内容宽（RootBorder 左右内边距各 20）。</summary>
+    private double ExpandedCoverSize()
+        => Math.Max(CompactCoverSize, (Width > 0 ? Width : AppSettings.Instance.CardWidth) - 40);
+
+    private void Cover_Click(object sender, MouseButtonEventArgs e) => ToggleCoverExpand();
+
+    private void CoverToggleBtn_Click(object sender, RoutedEventArgs e) => ToggleCoverExpand();
+
+    /// <summary>在缩略封面与整宽大封面之间切换，切换过程用尺寸动画过渡。</summary>
+    private void ToggleCoverExpand()
+    {
+        _coverExpanded = !_coverExpanded;
+        UpdateCoverToggleGlyph();
+        ApplyCoverLayout(animate: true);
+    }
+
+    /// <summary>切换按钮的图标与提示：缩略态给“放大”，放大态给“收起”。</summary>
+    private void UpdateCoverToggleGlyph()
+    {
+        if (CoverToggleGlyph == null) return;
+        CoverToggleGlyph.Text = _coverExpanded ? "\uE73E" : "\uE740";
+        string tip = _coverExpanded ? "收起封面" : "放大封面";
+        CoverToggleBtn.ToolTip = tip;
+        CoverBorder.ToolTip = tip;
+    }
+
+    /// <summary>封面按圆角裁切；放大/收起动画逐帧改尺寸，这里同步更新裁切几何。</summary>
+    private void CoverGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        CoverBorder.Clip = new RectangleGeometry(
+            new Rect(0, 0, e.NewSize.Width, e.NewSize.Height),
+            CoverCornerRadius, CoverCornerRadius);
+    }
+
+    /// <summary>
+    /// 按当前展开态套用封面尺寸。animate=false 直接落位（首次装载、设置变化），
+    /// 动画进行中收到的落位请求不打断，交给动画完成回调重算落位；
+    /// animate=true 走尺寸动画，完成后释放时钟再落位，避免 FillBehavior 挂住后续布局。
+    /// </summary>
+    private void ApplyCoverLayout(bool animate)
+    {
+        if (CoverGrid == null || CoverGrid.Visibility != Visibility.Visible) return;
+
+        if (!animate || !IsLoaded)
+        {
+            if (_coverAnimRunning) return;
+            CoverGrid.BeginAnimation(FrameworkElement.WidthProperty, null);
+            CoverGrid.BeginAnimation(FrameworkElement.HeightProperty, null);
+            double size = _coverExpanded ? ExpandedCoverSize() : CompactCoverSize;
+            CoverGrid.Width = size;
+            CoverGrid.Height = size;
+            return;
+        }
+
+        // 快速连点时从动画当前值起跳（Width/Height 读到的就是动画值），避免跳变
+        double fromW = CoverGrid.Width;
+        double fromH = CoverGrid.Height;
+        double to = _coverExpanded ? ExpandedCoverSize() : CompactCoverSize;
+        var duration = TimeSpan.FromMilliseconds(320);
+        var animW = new DoubleAnimation(fromW, to, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        var animH = new DoubleAnimation(fromH, to, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        animH.Completed += (_, _) =>
+        {
+            _coverAnimRunning = false;
+            CoverGrid.BeginAnimation(FrameworkElement.WidthProperty, null);
+            CoverGrid.BeginAnimation(FrameworkElement.HeightProperty, null);
+            // 动画途中卡片宽度设置可能变过，落位时重算，不沿用起跳时的目标值
+            double size = _coverExpanded ? ExpandedCoverSize() : CompactCoverSize;
+            CoverGrid.Width = size;
+            CoverGrid.Height = size;
+        };
+        _coverAnimRunning = true;
+        CoverGrid.BeginAnimation(FrameworkElement.WidthProperty, animW);
+        CoverGrid.BeginAnimation(FrameworkElement.HeightProperty, animH);
     }
 
     /// <summary>
@@ -311,10 +427,11 @@ public partial class MiFocusNotification : UserControl
     {
         if (MediaFavoriteBtn == null) return;
 
-        MediaFavoriteGlyph.Text = _favoriteActive ? "\u2665" : "\u2661";
-        MediaFavoriteBtn.Foreground = _favoriteActive ? OrangeBrushStatic : _themePrimaryBrush;
+        // HyperOS 图标：收藏描边/实心切换（miuix Favorites/FavoritesFill）
+        MediaFavoriteGlyph.Data = _favoriteActive ? HeartFilledGeometry : HeartOutlineGeometry;
+        MediaFavoriteBtn.Foreground = _favoriteActive ? (Brush)Resources["ToastAccentBrush"] : _themePrimaryBrush;
 
-        MediaLyricBtn.Foreground = _lyricActive ? OrangeBrushStatic : _themePrimaryBrush;
+        MediaLyricBtn.Foreground = _lyricActive ? (Brush)Resources["ToastAccentBrush"] : _themePrimaryBrush;
         LyricCheckBadge.Visibility = _lyricActive ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -397,20 +514,40 @@ public partial class MiFocusNotification : UserControl
         double d = Math.Clamp(AppSettings.Instance.CardDensity, 0.75, 1.25);
         RootBorder.Padding = new Thickness(20, BaseVerticalPadding * d, 20, BaseVerticalPadding * d);
         HeaderGrid.Margin = new Thickness(0, 0, 0, BaseHeaderBottomMargin * d);
+        // 封面放大态边长跟卡片宽度走，设置变化后在这里重算落位
+        ApplyCoverLayout(animate: false);
     }
 
+    /// <summary>应用深浅色配色。深色模式切换时带渐出渐入过场，其余设置变化直接换色。</summary>
     public void ApplyTheme()
+        => ThemeTransition.Apply(this, AppSettings.Instance.DarkMode, ApplyThemeColors);
+
+    private void ApplyThemeColors()
     {
         bool dark = AppSettings.Instance.DarkMode;
 
-        Color bg = dark ? Color.FromRgb(0x1C, 0x1C, 0x1E) : Colors.White;
-        Color primary = dark ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x1D, 0x1D, 0x1F);
-        Color secondary = dark ? Color.FromRgb(0x98, 0x98, 0x9F) : Color.FromRgb(0x86, 0x86, 0x8B);
-        Color contentColor = dark ? Color.FromRgb(0x98, 0x98, 0x9F) : Color.FromRgb(0x6E, 0x6E, 0x73);
-        Color iconBg = dark ? Color.FromRgb(0x2C, 0x2C, 0x2E) : Color.FromRgb(0xF5, 0xF5, 0xF7);
+        // HyperOS（miuix 令牌）：深色卡片 #242424、主文字 #F2F2F2、副标题 50% 白；浅色副标题 60% 黑
+        Color bg = dark ? Color.FromRgb(0x24, 0x24, 0x24) : Colors.White;
+        Color primary = dark ? Color.FromRgb(0xF2, 0xF2, 0xF2) : Colors.Black;
+        Color secondary = dark ? Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x99, 0x00, 0x00, 0x00);
+        Color contentColor = dark ? Color.FromArgb(0x73, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x66, 0x00, 0x00, 0x00);
+        Color iconBg = dark ? Color.FromRgb(0x2D, 0x2D, 0x2D) : Color.FromRgb(0xF0, 0xF0, 0xF0);
+        Color accent = dark ? Color.FromRgb(0x27, 0x7A, 0xF7) : Color.FromRgb(0x34, 0x82, 0xFF);
+        Color accentHover = dark ? Color.FromRgb(0x4B, 0x8C, 0xF8) : Color.FromRgb(0x2B, 0x74, 0xE8);
+        Color track = dark ? Color.FromRgb(0x4A, 0x4A, 0x4A) : Color.FromRgb(0xE6, 0xE6, 0xE6);
+
+        // 主色/图标底/轨道在模板里以 DynamicResource 引用，随主题整体替换实例
+        Resources["ToastAccentBrush"] = new SolidColorBrush(accent);
+        Resources["ToastAccentHoverBrush"] = new SolidColorBrush(accentHover);
+        Resources["ToastAccentSoftBrush"] = new SolidColorBrush(dark
+            ? Color.FromArgb(0x33, 0x27, 0x7A, 0xF7)
+            : Color.FromArgb(0x22, 0x34, 0x82, 0xFF));
+        Resources["ToastIconBgBrush"] = new SolidColorBrush(iconBg);
+        Resources["ToastTrackBrush"] = new SolidColorBrush(track);
 
         RootBorder.Background = new SolidColorBrush(bg);
         IconBackgroundBorder.Background = new SolidColorBrush(iconBg);
+        CoverBorder.Background = new SolidColorBrush(iconBg);
 
         AppNameText.Foreground = new SolidColorBrush(primary);
         TimeText.Foreground = new SolidColorBrush(secondary);
@@ -424,89 +561,24 @@ public partial class MiFocusNotification : UserControl
         OpenAppButton.Foreground = new SolidColorBrush(secondary);
         CloseButton.Foreground = new SolidColorBrush(secondary);
 
-        _themePrimaryBrush = new SolidColorBrush(primary);
+        _themePrimaryBrush = new SolidColorBrush(secondary);
 
         // 媒体面板
         if (MediaPanel != null)
         {
             MediaPanel.Background = new SolidColorBrush(iconBg);
-            Color trackColor = dark ? Color.FromRgb(0x48, 0x48, 0x4A) : Color.FromRgb(0xD1, 0xD1, 0xD6);
-            MediaTrack.Background = new SolidColorBrush(trackColor);
+            MediaTrack.Background = new SolidColorBrush(track);
             MediaCurTimeText.Foreground = new SolidColorBrush(secondary);
             MediaTotalTimeText.Foreground = new SolidColorBrush(secondary);
 
-            // 基础按钮色（收藏/歌词随后由 UpdateMediaToggleStates 覆盖为激活橙色）
-            var mediaBrush = new SolidColorBrush(primary);
+            // 基础按钮色（HyperOS 媒体控件：未激活置灰，激活态由 UpdateMediaToggleStates 提亮为主色）
+            var mediaBrush = new SolidColorBrush(secondary);
             foreach (var b in new[] { MediaFavoriteBtn, MediaPrevBtn, MediaPlayPauseBtn, MediaNextBtn, MediaLyricBtn })
             {
                 b.Foreground = mediaBrush;
             }
             UpdateMediaToggleStates();
         }
-    }
-
-    private static string? ExtractPickupCode(NotificationMessage msg)
-    {
-        string labelToSearch = msg.Progress?.Label ?? "";
-        string combined = $"{msg.Title} {msg.Content} {msg.BigText} {msg.HintText} {labelToSearch}";
-
-        var patterns = new[]
-        {
-            new Regex(@"取餐码[：: ]*([A-Za-z0-9\-]+)"),
-            new Regex(@"取餐号[：: ]*([A-Za-z0-9\-]+)"),
-            new Regex(@"取餐柜[：: ]*([A-Za-z0-9\-]+)"),
-            new Regex(@"取货码[：: ]*([A-Za-z0-9\-]+)"),
-            new Regex(@"提货码[：: ]*([A-Za-z0-9\-]+)"),
-            new Regex(@"柜号[：: ]*([A-Za-z0-9\-]+)"),
-            new Regex(@"码号[：: ]*([A-Za-z0-9\-]+)")
-        };
-
-        foreach (var pattern in patterns)
-        {
-            var m = pattern.Match(combined);
-            if (m.Success && m.Groups[1].Value.Length > 0)
-                return m.Groups[1].Value;
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// 从通知文本中提取短信验证码（4-6 位数字）。
-    /// 支持中文“验证码/校验码/动态码”与英文 verification/security code。
-    /// </summary>
-    public static string? ExtractVerificationCode(NotificationMessage msg)
-    {
-        string combined = $"{msg.Title} {msg.Content} {msg.BigText} {msg.HintText} {msg.Ticker}";
-        if (string.IsNullOrWhiteSpace(combined)) return null;
-
-        var directPatterns = new[]
-        {
-            new Regex(@"验证码[：:是\s]*([0-9]{4,6})"),
-            new Regex(@"校验码[：:是\s]*([0-9]{4,6})"),
-            new Regex(@"动态码[：:是\s]*([0-9]{4,6})"),
-            new Regex(@"确认码[：:是\s]*([0-9]{4,6})"),
-            new Regex(@"激活码[：:是\s]*([0-9]{4,6})"),
-            new Regex(@"verification\s*code[^0-9]{0,20}?([0-9]{4,6})", RegexOptions.IgnoreCase),
-            new Regex(@"security\s*code[^0-9]{0,20}?([0-9]{4,6})", RegexOptions.IgnoreCase),
-            new Regex(@"code\s*(?:is|:)?\s*([0-9]{4,6})", RegexOptions.IgnoreCase)
-        };
-
-        foreach (var pattern in directPatterns)
-        {
-            var m = pattern.Match(combined);
-            if (m.Success && m.Groups[1].Value.Length > 0)
-                return m.Groups[1].Value;
-        }
-
-        // 关键词兜底：文本中出现验证码相关字样时，取第一个 4-6 位独立数字串
-        string[] keywords = { "验证码", "校验码", "动态码", "确认码", "激活码", "verification", "security code" };
-        if (Array.Exists(keywords, k => combined.Contains(k, StringComparison.OrdinalIgnoreCase)))
-        {
-            var m = Regex.Match(combined, @"(?<![0-9])([0-9]{4,6})(?![0-9])");
-            if (m.Success) return m.Groups[1].Value;
-        }
-
-        return null;
     }
 
     private void CopyCodeButton_Click(object sender, RoutedEventArgs e)
@@ -577,27 +649,34 @@ public partial class MiFocusNotification : UserControl
 
     private void LoadIcon()
     {
+        ImageSource source;
         if (string.IsNullOrEmpty(Message.IconBase64))
         {
-            AppIconImage.Source = CreateDefaultIcon();
-            return;
+            source = CreateDefaultIcon();
         }
-        try
+        else
         {
-            byte[] bytes = Convert.FromBase64String(Message.IconBase64);
-            using var ms = new MemoryStream(bytes);
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = ms;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            AppIconImage.Source = bitmap;
+            try
+            {
+                byte[] bytes = Convert.FromBase64String(Message.IconBase64);
+                using var ms = new MemoryStream(bytes);
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.StreamSource = ms;
+                bitmap.EndInit();
+                bitmap.Freeze();
+                source = bitmap;
+            }
+            catch
+            {
+                source = CreateDefaultIcon();
+            }
         }
-        catch
-        {
-            AppIconImage.Source = CreateDefaultIcon();
-        }
+
+        AppIconImage.Source = source;
+        // 媒体通知的大图就是专辑封面，与头部小图标共用同一张图
+        CoverImage.Source = source;
     }
 
     private ImageSource CreateDefaultIcon()
@@ -606,14 +685,19 @@ public partial class MiFocusNotification : UserControl
         var dv = new DrawingVisual();
         using (var ctx = dv.RenderOpen())
         {
-            ctx.DrawRectangle(new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFF5F5F7")), null, new Rect(0, 0, 64, 64));
+            ctx.DrawRectangle(new SolidColorBrush(AppSettings.Instance.DarkMode
+                ? Color.FromRgb(0x2D, 0x2D, 0x2D)
+                : Color.FromRgb(0xF0, 0xF0, 0xF0)), null, new Rect(0, 0, 64, 64));
+            // 应用名首字可能是中文（微信、哔哩哔哩），字体与界面一致，避免退化成系统兜底字体
             var text = new FormattedText(
                 Message.AppName.Length > 0 ? Message.AppName[0].ToString().ToUpper() : "M",
                 CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                new Typeface("Segoe UI"), 26,
-                new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFF6900")),
+                new Typeface((FontFamily)FindResource("UiFontFamily"),
+                    FontStyles.Normal, FontWeights.Normal, FontStretches.Normal), 26,
+                new SolidColorBrush(AccentColor),
                 VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            ctx.DrawText(text, new Point(19, 13));
+            // 按实际字形居中，换字体后字宽变化也不会偏
+            ctx.DrawText(text, new Point((64 - text.Width) / 2, (64 - text.Height) / 2));
         }
         bmp.Render(dv);
         bmp.Freeze();
@@ -636,7 +720,7 @@ public partial class MiFocusNotification : UserControl
             var leftEllipse = new Ellipse
             {
                 Width = 12, Height = 12,
-                Fill = leftDone ? OrangeBrush : GrayBrush,
+                Fill = leftDone ? AccentDotBrush : TrackDotBrush,
                 VerticalAlignment = VerticalAlignment.Center
             };
             StageBar.Children.Add(leftEllipse);
@@ -647,7 +731,7 @@ public partial class MiFocusNotification : UserControl
                 {
                     Width = lineWidth, Height = 3,
                     RadiusX = 2, RadiusY = 2,
-                    Fill = leftDone && rightDone ? OrangeBrush : GrayBrush,
+                    Fill = leftDone && rightDone ? AccentDotBrush : TrackDotBrush,
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 StageBar.Children.Add(line);
@@ -657,14 +741,20 @@ public partial class MiFocusNotification : UserControl
         var lastEllipse = new Ellipse
         {
             Width = 12, Height = 12,
-            Fill = current >= segments ? OrangeBrush : GrayBrush,
+            Fill = current >= segments ? AccentDotBrush : TrackDotBrush,
             VerticalAlignment = VerticalAlignment.Center
         };
         StageBar.Children.Add(lastEllipse);
     }
 
-    private static readonly SolidColorBrush OrangeBrush = new((Color)ColorConverter.ConvertFromString("#FFFF6900"));
-    private static readonly SolidColorBrush GrayBrush = new((Color)ColorConverter.ConvertFromString("#FFE5E5EA"));
+    // 阶段圆点用色：填充=主色、未填充=轨道色。属性每次取值新建实例（重建频率低，可接受）
+    private static SolidColorBrush AccentDotBrush => new(AccentColor);
+    private static SolidColorBrush TrackDotBrush => new(TrackColor);
+
+    /// <summary>轨道/未填充色（阶段圆点）：深浅色各一套。</summary>
+    private static Color TrackColor => AppSettings.Instance.DarkMode
+        ? Color.FromRgb(0x50, 0x50, 0x50)
+        : Color.FromRgb(0xE6, 0xE6, 0xE6);
 
     private DateTime _lastFlash = DateTime.MinValue;
     private static readonly TimeSpan FlashThrottle = TimeSpan.FromMilliseconds(1500);
@@ -711,12 +801,12 @@ public partial class MiFocusNotification : UserControl
 
     public void PlayUpdateFlash()
     {
-        var orange = (Color)ColorConverter.ConvertFromString("#FFFF6900");
-        FlashBorderBrush.Color = orange;
+        var accent = AccentColor;
+        FlashBorderBrush.Color = accent;
         RootBorder.BorderThickness = new Thickness(2, 2, 2, 2);
 
         FlashBorderBrush.BeginAnimation(SolidColorBrush.ColorProperty,
-            new ColorAnimation(orange, Colors.Transparent, TimeSpan.FromMilliseconds(600)));
+            new ColorAnimation(accent, Colors.Transparent, TimeSpan.FromMilliseconds(600)));
         RootBorder.BeginAnimation(Border.BorderThicknessProperty,
             new ThicknessAnimation(new Thickness(2, 2, 2, 2), new Thickness(0, 0, 0, 0),
                 TimeSpan.FromMilliseconds(600)));

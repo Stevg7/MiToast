@@ -37,10 +37,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -69,14 +67,6 @@ import com.mitoast.shizuku.ShizukuHelper
 import com.mitoast.ui.AppSelectActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-// ---------- 品牌配色 ----------
-val BrandOrange = Color(0xFFFF6900)
-val PageBg = Color(0xFFF5F5F7)
-val TextDark = Color(0xFF1D1D1F)
-val TextGray = Color(0xFF86868B)
-val SuccessGreen = Color(0xFF34C759)
-val DividerColor = Color(0xFFF0F0F2)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,20 +102,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-fun MiToastTheme(content: @Composable () -> Unit) {
-    val colorScheme = lightColorScheme(
-        primary = BrandOrange,
-        onPrimary = Color.White,
-        secondary = BrandOrange,
-        background = PageBg,
-        onBackground = TextDark,
-        surface = Color.White,
-        onSurface = TextDark
-    )
-    MaterialTheme(colorScheme = colorScheme, content = content)
-}
-
 private data class UiState(
     val listenerGranted: Boolean = false,
     val listenerConnected: Boolean = false,
@@ -146,6 +122,7 @@ private data class UiState(
 @Composable
 private fun MainScreen() {
     val context = LocalContext.current
+    val c = hyperos()
     var state by remember { mutableStateOf(readUiState(context)) }
 
     // 服务重启进度：独立于 state 轮询，避免轮询刷新把进度状态覆盖掉
@@ -239,7 +216,7 @@ private fun MainScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(PageBg)
+            .background(c.pageBg)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -250,21 +227,21 @@ private fun MainScreen() {
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(13.dp))
-                    .background(BrandOrange),
+                    .background(c.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Text("M", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.width(14.dp))
             Column {
-                Text("MiToast", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextDark)
-                Text("手机通知 · 实时同步到电脑", fontSize = 13.sp, color = TextGray)
+                Text("MiToast", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = c.text)
+                Text("手机通知 · 实时同步到电脑", fontSize = 13.sp, color = c.textSecondary)
             }
         }
 
         // 运行状态
         MiCard {
-            Text("运行状态", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextDark)
+            Text("运行状态", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.text)
             Spacer(modifier = Modifier.height(10.dp))
             StatusRow(
                 "通知监听服务",
@@ -306,7 +283,7 @@ private fun MainScreen() {
             ) {
                 context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             }
-            Divider(color = DividerColor)
+            Divider(color = c.divider)
             PermissionRow(
                 title = "无障碍保活服务",
                 subtitle = "最强保活手段：服务被清理后自动重启同步",
@@ -318,7 +295,7 @@ private fun MainScreen() {
                 } catch (_: Exception) {
                 }
             }
-            Divider(color = DividerColor)
+            Divider(color = c.divider)
             PermissionRow(
                 title = "Shizuku 授权（进阶保活）",
                 subtitle = when {
@@ -353,7 +330,7 @@ private fun MainScreen() {
                     }
                 }
             }
-            Divider(color = DividerColor)
+            Divider(color = c.divider)
             PermissionRow(
                 title = "后台运行（忽略电池优化）",
                 subtitle = "避免锁屏 Doze 后网络被挂起、通知无法实时同步",
@@ -362,7 +339,7 @@ private fun MainScreen() {
                 requestIgnoreBatteryOptimizations(context)
             }
             if (state.isMiui) {
-                Divider(color = DividerColor)
+                Divider(color = c.divider)
                 PermissionRow(
                     title = "自启动与省电策略（小米机型）",
                     subtitle = "允许自启动，并把省电策略设为「无限制」，锁屏后才不会被断网清理",
@@ -374,7 +351,7 @@ private fun MainScreen() {
                 }
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Divider(color = DividerColor)
+                Divider(color = c.divider)
                 PermissionRow(
                     title = "显示通知",
                     subtitle = "用于前台服务保活",
@@ -393,9 +370,9 @@ private fun MainScreen() {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "通知应用白名单",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextDark
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.text
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     val desc = if (state.whitelistEnabled) {
@@ -403,9 +380,9 @@ private fun MainScreen() {
                     } else {
                         "当前同步全部非系统应用 · 点此自定义"
                     }
-                    Text(desc, fontSize = 13.sp, color = TextGray)
+                    Text(desc, fontSize = 14.sp, color = c.textSecondary)
                 }
-                Text(">", fontSize = 20.sp, color = TextGray)
+                Text(">", fontSize = 20.sp, color = c.textSecondary)
             }
         }
 
@@ -414,17 +391,18 @@ private fun MainScreen() {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "同步服务",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextDark
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = c.text
                     )
-                    Text("开启局域网 WebSocket 与设备发现", fontSize = 13.sp, color = TextGray)
+                    Text("开启局域网 WebSocket 与设备发现", fontSize = 14.sp, color = c.textSecondary)
                 }
                 Button(
                     onClick = { restartSyncService() },
                     enabled = !restarting,
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandOrange,
+                        containerColor = c.primary,
                         contentColor = Color.White
                     )
                 ) {
@@ -444,11 +422,11 @@ private fun MainScreen() {
                         .fillMaxWidth()
                         .height(5.dp)
                         .clip(RoundedCornerShape(3.dp)),
-                    color = BrandOrange,
-                    trackColor = DividerColor
+                    color = c.primary,
+                    trackColor = c.track
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(restartStage, fontSize = 12.sp, color = TextGray)
+                Text(restartStage, fontSize = 12.sp, color = c.textSecondary)
             }
         }
 
@@ -456,33 +434,38 @@ private fun MainScreen() {
     }
 }
 
+/** HyperOS 卡片：miuix Card = 16dp 圆角、surfaceContainer 底、16dp 内边距。 */
 @Composable
 private fun MiCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val c = hyperos()
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = Color.White
+        shape = RoundedCornerShape(16.dp),
+        color = c.card
     ) {
-        Column(modifier = Modifier.padding(18.dp), content = content)
+        Column(modifier = Modifier.padding(16.dp), content = content)
     }
 }
 
+/** 分组小标题：miuix SmallTitle = 14sp Bold + onBackgroundVariant（HyperOS 蓝灰）。 */
 @Composable
 private fun SectionHeader(title: String) {
+    val c = hyperos()
     Text(
         title,
         fontSize = 14.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = TextGray,
+        fontWeight = FontWeight.Bold,
+        color = c.sectionTitle,
         modifier = Modifier.padding(start = 4.dp)
     )
 }
 
 @Composable
 private fun StatusRow(label: String, value: String, ok: Boolean, showDot: Boolean = true) {
+    val c = hyperos()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -490,21 +473,21 @@ private fun StatusRow(label: String, value: String, ok: Boolean, showDot: Boolea
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontSize = 14.sp, color = TextDark)
+        Text(label, fontSize = 15.sp, color = c.text)
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (showDot) {
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (ok) SuccessGreen else Color(0xFFE5E5EA))
+                        .background(if (ok) SuccessGreen else c.track)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 value,
-                fontSize = 13.sp,
-                color = if (ok) TextDark else TextGray,
+                fontSize = 14.sp,
+                color = if (ok) c.text else c.textSecondary,
                 fontWeight = if (ok) FontWeight.Medium else FontWeight.Normal
             )
         }
@@ -520,6 +503,7 @@ private fun PermissionRow(
     actionText: String? = null,
     onClick: () -> Unit
 ) {
+    val c = hyperos()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -528,16 +512,17 @@ private fun PermissionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextDark)
-            Text(subtitle, fontSize = 12.sp, color = TextGray)
+            // miuix BasicComponent：headline1 17sp Medium + body2 14sp 副标题
+            Text(title, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = c.text)
+            Text(subtitle, fontSize = 14.sp, color = c.textSecondary)
         }
         if (granted) {
-            Text(grantedText, fontSize = 13.sp, color = SuccessGreen, fontWeight = FontWeight.Medium)
+            Text(grantedText, fontSize = 14.sp, color = SuccessGreen, fontWeight = FontWeight.Medium)
         } else {
             Text(
                 actionText ?: "去设置 >",
-                fontSize = 13.sp,
-                color = BrandOrange,
+                fontSize = 14.sp,
+                color = c.primary,
                 fontWeight = FontWeight.Medium
             )
         }

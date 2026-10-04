@@ -1,79 +1,132 @@
 <Window x:Class="MiToast.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="MiToast 设置"
         Height="720"
         Width="520"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize"
-        FontFamily="Segoe UI"
+        WindowStyle="None"
+        FontFamily="{StaticResource UiFontFamily}"
         Background="{DynamicResource PageBgBrush}">
+
+    <!-- 标题栏并入内容：WindowStyle=None 去掉系统标题栏（含蓝色边框），WindowChrome 补回拖动、
+         贴边、DWM 阴影与圆角等原生行为。CaptionHeight 与下方标题行同高；窗口 CanMinimize 不可
+         缩放，ResizeBorderThickness 置 0；关闭系统 caption 按钮后由自绘按钮替代（见 App.xaml）。 -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="48"
+                            ResizeBorderThickness="0"
+                            GlassFrameThickness="0"
+                            CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
 
     <!-- 主题色板与控件样式统一定义在 App.xaml，本窗口 ApplyTheme 按深浅色替换色板实例 -->
 
-    <!-- 触摸屏适配：PanningMode 非 None 才会响应手指拖动滚动；关闭长按/划动手势避免打断滑动；点击仍由触摸提升为鼠标事件正常响应 -->
-    <ScrollViewer PanningMode="VerticalOnly" PanningDeceleration="0.0015" Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="28,24">
-            <!-- 标题区 -->
-            <TextBlock Text="设置"
-                       FontSize="28"
-                       FontWeight="Bold"
-                       Foreground="{DynamicResource TextPrimaryBrush}"/>
-            <TextBlock Text="调整通知窗口在电脑上的显示方式"
-                       FontSize="13"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       Margin="0,4,0,22"/>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-            <!-- 显示位置 -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="显示位置" Style="{StaticResource SectionTitle}"/>
+        <!-- 自绘标题行：整行位于 WindowChrome 标题区内，按住可拖动窗口；
+             按钮经 IsHitTestVisibleInChrome 豁免出标题区才能收到点击 -->
+        <Grid Background="Transparent">
+            <TextBlock Text="MiToast 设置"
+                       FontSize="12"
+                       Margin="16,0,0,0"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal">
+                <Button Style="{StaticResource CaptionButton}" Click="MinimizeButton_Click"
+                        AutomationProperties.Name="最小化">
+                    <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets, Segoe Fluent Icons" FontSize="10"/>
+                </Button>
+                <Button x:Name="CloseButton" Style="{StaticResource CaptionCloseButton}" Click="CloseButton_Click"
+                        AutomationProperties.Name="关闭">
+                    <!-- miuix Close：悬停红底时随 Foreground 转白 -->
+                    <Viewbox Width="11" Height="11">
+                        <Canvas Width="1047.6" Height="1047.6">
+                            <Path Data="F1 M 523.8,593.3 L 832.7,903.9 Q 845.0,916.5 857.1,916.3 Q 869.2,916.2 881.2,903.9 L 897.5,887.6 Q 909.6,875.6 909.7,863.8 Q 909.9,852.0 897.5,839.1 L 588.6,528.4 L 898.8,218.3 Q 911.0,206.6 911.3,194.8 Q 911.7,182.9 898.8,170.5 L 881.0,152.7 Q 858.2,129.9 833.6,153.8 L 523.8,463.6 L 213.1,154.7 Q 201.5,142.7 189.2,142.5 Q 177.0,142.3 164.6,154.7 L 148.6,171.0 Q 136.3,182.7 136.3,194.9 Q 136.3,207.1 148.2,219.2 L 458.9,528.4 L 149.1,839.1 Q 137.1,852.0 137.1,863.8 Q 137.1,875.6 149.1,887.6 L 165.5,903.9 Q 178.4,916.5 190.0,916.5 Q 201.6,916.5 214.0,903.9 Z"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                <Path.RenderTransform>
+                                    <MatrixTransform Matrix="1,0,0,-1,0,1047.6"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Canvas>
+                    </Viewbox>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- 触摸屏适配：PanningMode 非 None 才会响应手指拖动滚动；关闭长按/划动手势避免打断滑动；点击仍由触摸提升为鼠标事件正常响应 -->
+        <ScrollViewer Grid.Row="1" PanningMode="VerticalOnly" PanningDeceleration="0.0015" Stylus.IsPressAndHoldEnabled="False" Stylus.IsFlicksEnabled="False" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="28,8,28,24">
+                <!-- 标题区 -->
+                <TextBlock Text="设置"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"/>
+                <TextBlock Text="调整通知窗口在电脑上的显示方式"
+                           FontSize="13"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           Margin="0,4,0,22"/>
+
+                <!-- 显示位置 -->
+                <Border Style="{StaticResource SectionCard}">
+                    <StackPanel>
+                        <TextBlock Text="显示位置" Style="{StaticResource SectionTitle}"/>
                     <ComboBox x:Name="PositionCombo"
                               Style="{StaticResource ModernComboBox}"
                               ItemContainerStyle="{StaticResource ModernComboBoxItem}"
+                              SelectionChanged="PositionCombo_SelectionChanged"
                               SelectedIndex="0">
-                        <ComboBoxItem Content="屏幕右上角" Tag="TopRight"/>
-                        <ComboBoxItem Content="屏幕右下角" Tag="BottomRight"/>
-                        <ComboBoxItem Content="屏幕左上角" Tag="TopLeft"/>
-                        <ComboBoxItem Content="屏幕左下角" Tag="BottomLeft"/>
-                    </ComboBox>
-                </StackPanel>
-            </Border>
+                            <ComboBoxItem Content="屏幕右上角" Tag="TopRight"/>
+                            <ComboBoxItem Content="屏幕右下角" Tag="BottomRight"/>
+                            <ComboBoxItem Content="屏幕左上角" Tag="TopLeft"/>
+                            <ComboBoxItem Content="屏幕左下角" Tag="BottomLeft"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Border>
 
-            <!-- 连接 -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="连接" Style="{StaticResource SectionTitle}"/>
+                <!-- 连接 -->
+                <Border Style="{StaticResource SectionCard}">
+                    <StackPanel>
+                        <TextBlock Text="连接" Style="{StaticResource SectionTitle}"/>
 
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="92"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                            <TextBlock Text="手机地址" Style="{StaticResource ItemLabel}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="92"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock Text="手机地址" Style="{StaticResource ItemLabel}"/>
                             <TextBox x:Name="PhoneHostBox"
                                      Style="{StaticResource ModernTextBox}"
-                                     Margin="0,8,0,0"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="端口" Style="{StaticResource ItemLabel}"/>
+                                     Margin="0,8,0,0"
+                                     TextChanged="ConnectionField_TextChanged"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="端口" Style="{StaticResource ItemLabel}"/>
                             <TextBox x:Name="PhonePortBox"
                                      Style="{StaticResource ModernTextBox}"
                                      Margin="0,8,0,0"
                                      MaxLength="5"
+                                     TextChanged="ConnectionField_TextChanged"
                                      PreviewTextInput="PhonePortBox_PreviewTextInput"/>
-                        </StackPanel>
-                    </Grid>
-                    <TextBlock Text="留空则自动搜索。手机端 MiToast 首页显示的手机地址填在这里；校园网屏蔽设备发现广播时，这是最可靠的连接方式。"
-                               Style="{StaticResource ItemHint}"
-                               TextWrapping="Wrap"
-                               Margin="0,8,0,18"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="留空则自动搜索。手机端 MiToast 首页显示的手机地址填在这里；校园网屏蔽设备发现广播时，这是最可靠的连接方式。"
+                                   Style="{StaticResource ItemHint}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,18"/>
 
                     <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="92"/>
+                            <!-- 112：容纳“手机首页显示”六个字（17px 字号下 102px），92 会顶出窗口被裁 -->
+                            <ColumnDefinition Width="112"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,10,0">
                             <TextBlock Text="配对码" Style="{StaticResource ItemLabel}"/>
@@ -81,235 +134,337 @@
                                      Style="{StaticResource ModernTextBox}"
                                      Margin="0,8,0,0"
                                      MaxLength="8"
-                                     CharacterCasing="Upper"/>
+                                     CharacterCasing="Upper"
+                                     TextChanged="ConnectionField_TextChanged"/>
                         </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Text="手机首页显示" Style="{StaticResource ItemLabel}"/>
-                            <TextBlock Text="配对码"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource TextSecondaryBrush}"
-                                       Margin="0,13,0,0"
-                                       HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
-                    <TextBlock Text="手机端首页「运行状态」卡片里的配对码。手机只接受配对码正确的电脑连接，填错将无法同步。"
-                               Style="{StaticResource ItemHint}"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,18"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="手机首页显示" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock Text="配对码"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,13,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="手机端首页「运行状态」卡片里的配对码。手机只接受配对码正确的电脑连接，填错将无法同步。"
+                                   Style="{StaticResource ItemHint}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,18"/>
 
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="扫描本网段" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock Text="广播搜不到时逐个探测本机网段（较慢，且部分校园网禁止扫描行为，请确认后再开启）"
+                                           Style="{StaticResource ItemHint}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,2,10,0"/>
+                            </StackPanel>
+                        <CheckBox x:Name="SweepCheck"
+                                  Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  Checked="SweepCheck_Toggled"
+                                  Unchecked="SweepCheck_Toggled"/>
+                        </Grid>
+
+                        <Border Background="{DynamicResource HoverBrush}" CornerRadius="8" Padding="12,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="ConnectionStatusText"
+                                           Grid.Column="0"
+                                           Text="正在搜索 Android 设备..."
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,0,10,0"/>
+                                <Button x:Name="RescanButton"
+                                        Grid.Column="1"
+                                        Content="重新搜索"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Height="34"
+                                        Padding="16,0"
+                                        Click="RescanButton_Click"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- 外观 -->
+                <Border Style="{StaticResource SectionCard}">
+                    <StackPanel>
+                        <TextBlock Text="外观" Style="{StaticResource SectionTitle}"/>
+
+                        <Grid Margin="0,0,0,18">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="深色模式" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock Text="将通知卡片与窗口切换为深色背景，立即生效" Style="{StaticResource ItemHint}"/>
+                            </StackPanel>
+                            <CheckBox x:Name="DarkModeCheck"
+                                      Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      Checked="DarkModeCheck_Toggled"
+                                      Unchecked="DarkModeCheck_Toggled"/>
+                        </Grid>
+
+                        <TextBlock x:Name="WidthLabel"
+                                   Text="卡片宽度：480 px"
+                                   Style="{StaticResource ItemLabel}"
+                                   Margin="0,0,0,8"/>
+                        <Slider x:Name="WidthSlider"
+                                Style="{StaticResource ModernSlider}"
+                                Minimum="320"
+                                Maximum="640"
+                                Value="480"
+                                TickFrequency="10"
+                                IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                ValueChanged="WidthSlider_ValueChanged"/>
+
+                        <TextBlock x:Name="MarginLabel"
+                                   Text="屏幕边距：40 px"
+                                   Style="{StaticResource ItemLabel}"
+                                   Margin="0,18,0,8"/>
+                        <Slider x:Name="MarginSlider"
+                                Style="{StaticResource ModernSlider}"
+                                Minimum="8"
+                                Maximum="120"
+                                Value="40"
+                                TickFrequency="2"
+                                IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                ValueChanged="MarginSlider_ValueChanged"/>
+
+                        <TextBlock x:Name="GapLabel"
+                                   Text="卡片间距：3 px"
+                                   Style="{StaticResource ItemLabel}"
+                                   Margin="0,18,0,8"/>
+                        <Slider x:Name="GapSlider"
+                                Style="{StaticResource ModernSlider}"
+                                Minimum="0"
+                                Maximum="24"
+                                Value="3"
+                                TickFrequency="1"
+                                IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                ValueChanged="GapSlider_ValueChanged"/>
+
+                        <TextBlock x:Name="DensityLabel"
+                                   Text="卡片紧凑度：标准"
+                                   Style="{StaticResource ItemLabel}"
+                                   Margin="0,18,0,8"/>
+                        <Slider x:Name="DensitySlider"
+                                Style="{StaticResource ModernSlider}"
+                                Minimum="75"
+                                Maximum="125"
+                                Value="100"
+                                TickFrequency="5"
+                                IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
+                                ValueChanged="DensitySlider_ValueChanged"/>
+                        <TextBlock Text="紧凑卡片更矮更省空间，宽松卡片更透气"
+                                   Style="{StaticResource ItemHint}"
+                                   Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 音乐 -->
+                <Border Style="{StaticResource SectionCard}">
+                    <StackPanel>
+                        <TextBlock Text="音乐" Style="{StaticResource SectionTitle}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="音乐通知常驻" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock Text="开启后始终置顶、不自动消失；关闭后约 9 秒消失" Style="{StaticResource ItemHint}"/>
+                            </StackPanel>
+                            <CheckBox x:Name="MusicPersistentCheck"
+                                      Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="True"
+                                      Checked="MusicPersistentCheck_Toggled"
+                                      Unchecked="MusicPersistentCheck_Toggled"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+            <!-- 勿扰模式：两个独立开关，开关一与托盘菜单实时同步 -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="勿扰模式" Style="{StaticResource SectionTitle}"/>
                     <Grid Margin="0,0,0,14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="扫描本网段" Style="{StaticResource ItemLabel}"/>
-                            <TextBlock Text="广播搜不到时逐个探测本机网段（较慢，且部分校园网禁止扫描行为，请确认后再开启）"
+                            <TextBlock Text="勿扰模式" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="开启后通知仍会保存到历史但不弹出，与托盘菜单实时同步" Style="{StaticResource ItemHint}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="DndCheck"
+                                  Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  Checked="DndCheck_Toggled"
+                                  Unchecked="DndCheck_Toggled"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="同步手机端勿扰" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="手机端开启勿扰后，电脑端自动同步静默（不弹卡片）" Style="{StaticResource ItemHint}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="DndSyncCheck"
+                                  Grid.Column="1"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  Checked="DndSyncCheck_Toggled"
+                                  Unchecked="DndSyncCheck_Toggled"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 本地总结：推理引擎（llama.cpp + 本地大模型）的下载/测试与总结窗口入口 -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <TextBlock Text="本地总结" Style="{StaticResource SectionTitle}"/>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="推理引擎与模型" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="下载 llama.cpp 与 Qwen3-4B 量化模型（约 2.5GB）到本机数据目录，中断后自动续传"
                                        Style="{StaticResource ItemHint}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,10,0"/>
                         </StackPanel>
-                        <CheckBox x:Name="SweepCheck"
-                                  Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"/>
+                        <Button x:Name="LocalSummaryDownloadButton"
+                                Grid.Column="1"
+                                Content="下载引擎与模型"
+                                Style="{StaticResource SecondaryButton}"
+                                Height="34"
+                                Padding="16,0"
+                                VerticalAlignment="Center"
+                                Click="LocalSummaryDownloadButton_Click"/>
                     </Grid>
 
-                    <Border Background="{DynamicResource HoverBrush}" CornerRadius="8" Padding="12,10">
+                    <!-- 引擎状态条：与连接区的状态行同款（软底 + 12px 状态字 + 紧凑按钮） -->
+                    <Border Background="{DynamicResource HoverBrush}" CornerRadius="8" Padding="12,10" Margin="0,0,0,14">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="ConnectionStatusText"
+                            <TextBlock x:Name="LocalSummaryStatus"
                                        Grid.Column="0"
-                                       Text="正在搜索 Android 设备..."
+                                       Text="尚未下载"
                                        FontSize="12"
                                        TextWrapping="Wrap"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextSecondaryBrush}"
                                        Margin="0,0,10,0"/>
-                            <Button x:Name="RescanButton"
+                            <Button x:Name="LocalSummaryTestButton"
                                     Grid.Column="1"
-                                    Content="重新搜索"
+                                    Content="测试引擎"
                                     Style="{StaticResource SecondaryButton}"
                                     Height="34"
                                     Padding="16,0"
-                                    Click="RescanButton_Click"/>
+                                    Click="LocalSummaryTestButton_Click"/>
                         </Grid>
                     </Border>
-                </StackPanel>
-            </Border>
 
-            <!-- 外观 -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="外观" Style="{StaticResource SectionTitle}"/>
-
-                    <Grid Margin="0,0,0,18">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="深色模式" Style="{StaticResource ItemLabel}"/>
-                            <TextBlock Text="将通知卡片与窗口切换为深色背景，立即生效" Style="{StaticResource ItemHint}"/>
-                        </StackPanel>
-                        <CheckBox x:Name="DarkModeCheck"
-                                  Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  Checked="DarkModeCheck_Toggled"
-                                  Unchecked="DarkModeCheck_Toggled"/>
-                    </Grid>
-
-                    <TextBlock x:Name="WidthLabel"
-                               Text="卡片宽度：480 px"
-                               Style="{StaticResource ItemLabel}"
-                               Margin="0,0,0,8"/>
-                    <Slider x:Name="WidthSlider"
-                            Style="{StaticResource ModernSlider}"
-                            Minimum="320"
-                            Maximum="640"
-                            Value="480"
-                            TickFrequency="10"
-                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
-                            ValueChanged="WidthSlider_ValueChanged"/>
-
-                    <TextBlock x:Name="MarginLabel"
-                               Text="屏幕边距：40 px"
-                               Style="{StaticResource ItemLabel}"
-                               Margin="0,18,0,8"/>
-                    <Slider x:Name="MarginSlider"
-                            Style="{StaticResource ModernSlider}"
-                            Minimum="8"
-                            Maximum="120"
-                            Value="40"
-                            TickFrequency="2"
-                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
-                            ValueChanged="MarginSlider_ValueChanged"/>
-
-                    <TextBlock x:Name="GapLabel"
-                               Text="卡片间距：3 px"
-                               Style="{StaticResource ItemLabel}"
-                               Margin="0,18,0,8"/>
-                    <Slider x:Name="GapSlider"
-                            Style="{StaticResource ModernSlider}"
-                            Minimum="0"
-                            Maximum="24"
-                            Value="3"
-                            TickFrequency="1"
-                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
-                            ValueChanged="GapSlider_ValueChanged"/>
-
-                    <TextBlock x:Name="DensityLabel"
-                               Text="卡片紧凑度：标准"
-                               Style="{StaticResource ItemLabel}"
-                               Margin="0,18,0,8"/>
-                    <Slider x:Name="DensitySlider"
-                            Style="{StaticResource ModernSlider}"
-                            Minimum="75"
-                            Maximum="125"
-                            Value="100"
-                            TickFrequency="5"
-                            IsSnapToTickEnabled="True" IsMoveToPointEnabled="True"
-                            ValueChanged="DensitySlider_ValueChanged"/>
-                    <TextBlock Text="紧凑卡片更矮更省空间，宽松卡片更透气"
-                               Style="{StaticResource ItemHint}"
-                               Margin="0,6,0,0"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 音乐 -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="音乐" Style="{StaticResource SectionTitle}"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="音乐通知常驻" Style="{StaticResource ItemLabel}"/>
-                            <TextBlock Text="音乐卡片始终置顶显示，暂停播放后也不会自动消失" Style="{StaticResource ItemHint}"/>
+                            <TextBlock Text="生成与查看" Style="{StaticResource ItemLabel}"/>
+                            <TextBlock Text="手动生成总结并查看历史记录，推理全程在本地 CPU 进行，内容不出本机"
+                                       Style="{StaticResource ItemHint}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,10,0"/>
                         </StackPanel>
-                        <CheckBox x:Name="MusicPersistentCheck"
-                                  Grid.Column="1"
-                                  Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="True"
-                                  Checked="MusicPersistentCheck_Toggled"
-                                  Unchecked="MusicPersistentCheck_Toggled"/>
+                        <Button x:Name="LocalSummaryOpenButton"
+                                Grid.Column="1"
+                                Content="打开总结窗口"
+                                Style="{StaticResource SecondaryButton}"
+                                Height="34"
+                                Padding="16,0"
+                                VerticalAlignment="Center"
+                                Click="LocalSummaryOpenButton_Click"/>
                     </Grid>
                 </StackPanel>
             </Border>
 
-            <!-- 勿扰模式 -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="勿扰模式" Style="{StaticResource SectionTitle}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="勿扰模式" Style="{StaticResource ItemLabel}"/>
-                            <TextBlock Text="开启后通知仍会保存到历史但不弹出" Style="{StaticResource ItemHint}"/>
-                        </StackPanel>
-                        <ComboBox x:Name="DndModeCombo"
-                                  Grid.Column="1"
-                                  Style="{StaticResource ModernComboBox}"
-                                  ItemContainerStyle="{StaticResource ModernComboBoxItem}"
-                                  Width="170"
-                                  SelectedIndex="0">
-                            <ComboBoxItem Content="关闭" Tag="off"/>
-                            <ComboBoxItem Content="PC 端静默" Tag="pc"/>
-                            <ComboBoxItem Content="同步手机勿扰" Tag="sync"/>
-                        </ComboBox>
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <!-- 历史 -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <TextBlock Text="历史记录" Style="{StaticResource SectionTitle}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="保存历史通知" Style="{StaticResource ItemLabel}"/>
-                            <TextBlock Text="在电脑上保存最近 10000 条通知，相同内容自动合并显示" Style="{StaticResource ItemHint}"/>
-                        </StackPanel>
+                <!-- 历史 -->
+                <Border Style="{StaticResource SectionCard}">
+                    <StackPanel>
+                        <TextBlock Text="历史记录" Style="{StaticResource SectionTitle}"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="保存历史通知" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock Text="在电脑上保存最近 10000 条通知，相同内容自动合并显示" Style="{StaticResource ItemHint}"/>
+                            </StackPanel>
                         <CheckBox x:Name="HistoryCheck"
                                   Grid.Column="1"
                                   Style="{StaticResource ToggleSwitch}"
-                                  IsChecked="True"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+                                  Checked="HistoryCheck_Toggled"
+                                  Unchecked="HistoryCheck_Toggled"/>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="局域网 MCP 接口" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock x:Name="McpLanStatus"
+                                           Style="{StaticResource ItemHint}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,2,10,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="使用说明"
+                                        Style="{StaticResource SecondaryButton}"
+                                        Height="30"
+                                        Padding="12,0"
+                                        Margin="0,0,12,0"
+                                        Click="McpLanHelpButton_Click"/>
+                                <CheckBox x:Name="McpLanCheck"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          Checked="McpLanCheck_Toggled"
+                                          Unchecked="McpLanCheck_Toggled"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-            <!-- 底部按钮区 -->
+            <!-- 底部按钮区：设置全部即时生效，不再需要“保存并应用” -->
             <Grid Margin="0,8,0,8">
                 <Button x:Name="HistoryButton"
                         Content="查看历史通知"
                         Style="{StaticResource SecondaryButton}"
                         HorizontalAlignment="Left"
                         Click="HistoryButton_Click"/>
-                <Button x:Name="SaveButton"
-                        Content="保存并应用"
-                        Style="{StaticResource PrimaryButton}"
-                        HorizontalAlignment="Right"
-                        Click="SaveButton_Click"/>
-                <TextBlock x:Name="SavedHint"
-                           Text="&#x2713; 已应用"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           Foreground="#FF34C759"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Visibility="Collapsed"/>
             </Grid>
-        </StackPanel>
-    </ScrollViewer>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Window>

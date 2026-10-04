@@ -1,0 +1,15 @@
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.GeneratedMSBuildEditorConfig.editorconfig
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.AssemblyInfoInputs.cache
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.AssemblyInfo.cs
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.csproj.CoreCompileInputs.cache
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.sourcelink.json
+F:\project\MiToast\tools\FakePhone\bin\Debug\net8.0-windows\FakePhone.exe
+F:\project\MiToast\tools\FakePhone\bin\Debug\net8.0-windows\FakePhone.deps.json
+F:\project\MiToast\tools\FakePhone\bin\Debug\net8.0-windows\FakePhone.runtimeconfig.json
+F:\project\MiToast\tools\FakePhone\bin\Debug\net8.0-windows\FakePhone.dll
+F:\project\MiToast\tools\FakePhone\bin\Debug\net8.0-windows\FakePhone.pdb
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.dll
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\refint\FakePhone.dll
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.pdb
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\FakePhone.genruntimeconfig.cache
+F:\project\MiToast\tools\FakePhone\obj\Debug\net8.0-windows\ref\FakePhone.dll

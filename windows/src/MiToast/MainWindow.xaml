@@ -6,6 +6,7 @@
         xmlns:ui="clr-namespace:MiToast.UI"
         mc:Ignorable="d"
         Title="MiToast"
+        FontFamily="{StaticResource UiFontFamily}"
         Width="0" Height="0"
         Topmost="True"
         ShowInTaskbar="False"
@@ -66,7 +67,7 @@
                                                    Text="&#x2713;"
                                                    FontWeight="Bold"
                                                    FontSize="13"
-                                                   Foreground="#FFFF6900"
+                                                   Foreground="#FF3482FF"
                                                    VerticalAlignment="Center"
                                                    Visibility="Collapsed"/>
                                         <ContentPresenter Grid.Column="1"
@@ -79,7 +80,7 @@
                                         <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
                                     </Trigger>
                                     <Trigger Property="IsHighlighted" Value="True">
-                                        <Setter TargetName="Bd" Property="Background" Value="#22FF6900"/>
+                                        <Setter TargetName="Bd" Property="Background" Value="#1F3482FF"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>

@@ -29,6 +29,10 @@ public partial class App : Application
         _ = AppSettings.Instance;
         _ = HistoryService.Instance;
 
+        // 局域网 MCP 接口：按设置常驻启停（设置变化时实时对齐）
+        McpLanService.ApplyFromSettings();
+        AppSettings.Instance.Changed += (_, _) => McpLanService.ApplyFromSettings();
+
         base.OnStartup(e);
         Network.NetworkManager.Instance.Start();
     }
@@ -37,6 +41,7 @@ public partial class App : Application
     {
         // 退出前把防抖未落盘的历史记录刷盘，保证最近通知不丢
         try { HistoryService.Instance.Flush(); } catch { }
+        McpLanService.Shutdown();
         Network.NetworkManager.Instance.Stop();
         base.OnExit(e);
     }

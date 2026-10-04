@@ -23,6 +23,11 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
         }
     }
 
+    init {
+        // 服务重建时端口常被旧实例的 TIME_WAIT 占着：允许立刻重绑，避免端口空窗期电脑端"突然连不上"
+        setReuseAddr(true)
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val connectedClients = java.util.concurrent.CopyOnWriteArrayList<org.java_websocket.WebSocket>()
 
@@ -63,6 +68,7 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
         connectedClients.remove(conn)
         authedClients.remove(conn)
         Log.d(TAG, "Client disconnected: ${conn.remoteSocketAddress} code=$code reason=$reason")
+        NetworkManager.onClientCountChanged(getConnectedCount())
     }
 
     override fun onMessage(conn: org.java_websocket.WebSocket?, message: String?) {
@@ -82,6 +88,7 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
                 ) {
                     authedClients[conn] = true
                     Log.i(TAG, "Client authenticated: ${conn.remoteSocketAddress}")
+                    NetworkManager.onClientCountChanged(getConnectedCount())
                 } else {
                     Log.w(TAG, "Client auth failed, closing: ${conn.remoteSocketAddress}")
                     try { conn.close(4001, "auth required") } catch (_: Exception) {}
@@ -90,6 +97,10 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
             }
 
             when (obj["type"]?.jsonPrimitive?.contentOrNull) {
+                "ping" -> {
+                    // 电脑端保活/连通性探测：回一条 pong 当活性凭据（旧版电脑端不识别 pong，忽略即可）
+                    try { conn.send("{\"type\":\"pong\"}") } catch (_: Exception) {}
+                }
                 "open_app" -> {
                     val pkg = obj["packageName"]?.jsonPrimitive?.contentOrNull ?: return
                     NetworkManager.executeOpenApp(pkg)
@@ -162,7 +173,8 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
         scope.launch {
             val jsonStr = json.encodeToString(message)
             val dead = mutableListOf<org.java_websocket.WebSocket>()
-            for (client in connectedClients) {
+            // 只发给已完成配对码认证的连接：未认证连接要么马上被 4001 掐断，要么是不该收通知的陌生端
+            for (client in authedClients.keys) {
                 try {
                     if (client.isOpen) client.send(jsonStr) else dead.add(client)
                 } catch (e: Exception) {
@@ -170,7 +182,7 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
                     dead.add(client)
                 }
             }
-            dead.forEach { connectedClients.remove(it) }
+            dead.forEach { authedClients.remove(it); connectedClients.remove(it) }
         }
     }
 
@@ -178,7 +190,7 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
         scope.launch {
             val jsonStr = json.encodeToString(message)
             val dead = mutableListOf<org.java_websocket.WebSocket>()
-            for (client in connectedClients) {
+            for (client in authedClients.keys) {
                 try {
                     if (client.isOpen) client.send(jsonStr) else dead.add(client)
                 } catch (e: Exception) {
@@ -186,7 +198,7 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
                     dead.add(client)
                 }
             }
-            dead.forEach { connectedClients.remove(it) }
+            dead.forEach { authedClients.remove(it); connectedClients.remove(it) }
         }
     }
 
@@ -194,11 +206,11 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
         scope.launch {
             val jsonStr = "{\"type\":\"dnd_status\",\"enabled\":$enabled}"
             val dead = mutableListOf<org.java_websocket.WebSocket>()
-            for (client in connectedClients) {
+            for (client in authedClients.keys) {
                 try { if (client.isOpen) client.send(jsonStr) else dead.add(client) }
                 catch (e: Exception) { dead.add(client) }
             }
-            dead.forEach { connectedClients.remove(it) }
+            dead.forEach { authedClients.remove(it); connectedClients.remove(it) }
         }
     }
 
@@ -223,10 +235,10 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
         )
     }
 
-    /** 向所有已连接客户端广播原始 JSON（妙播设备列表等）。 */
+    /** 向所有已完成配对码认证的客户端广播原始 JSON（妙播设备列表等）。 */
     private fun broadcastPayload(jsonStr: String) {
         val dead = mutableListOf<org.java_websocket.WebSocket>()
-        for (client in connectedClients) {
+        for (client in authedClients.keys) {
             try {
                 if (client.isOpen) client.send(jsonStr) else dead.add(client)
             } catch (e: Exception) {
@@ -234,8 +246,9 @@ class MiToastWebSocketServer(port: Int, private val authToken: String) : org.jav
                 dead.add(client)
             }
         }
-        dead.forEach { connectedClients.remove(it) }
+        dead.forEach { authedClients.remove(it); connectedClients.remove(it) }
     }
 
-    fun getConnectedCount(): Int = connectedClients.size
+    /** 已完成配对码认证的客户端数——"已连接电脑 N 台"的真实口径（未认证连接很快被 4001 掐断，不算已连接）。 */
+    fun getConnectedCount(): Int = authedClients.size
 }
