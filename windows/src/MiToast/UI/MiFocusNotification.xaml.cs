@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -64,7 +65,7 @@ public partial class MiFocusNotification : UserControl
             LoadData();
             PlayShowAnimation();
         };
-        Unloaded += (_, _) => StopMediaTick();
+        Unloaded += (_, _) => { StopMediaTick(); StopDeliveryTick(); };
     }
 
     public int CalculateHeight()
@@ -189,14 +190,23 @@ public partial class MiFocusNotification : UserControl
             StageLabelText.Text = Message.Progress.Label;
             if (Message.Progress.Total > 0)
             {
-                int percent = (int)Math.Round((double)Message.Progress.Current / Message.Progress.Total * 100);
-                ProgressPercentText.Text = $"{percent}%";
-                BuildStageBar(Message.Progress.Current, Message.Progress.Total, Message.Category);
+                if (Message.Category == "delivery")
+                {
+                    // 配送卡用距离/ETA 融合的连续进度，7 档阶段只作下限
+                    ApplyDeliveryProgress();
+                }
+                else
+                {
+                    int percent = (int)Math.Round((double)Message.Progress.Current / Message.Progress.Total * 100);
+                    ProgressPercentText.Text = $"{percent}%";
+                    BuildStageBar(Message.Progress.Current, Message.Progress.Total, Message.Category);
+                }
             }
         }
         else
         {
             ProgressPanel.Visibility = Visibility.Collapsed;
+            StopDeliveryTick();
         }
 
         // 短信/验证码类通知显示一键复制按钮（取餐码卡片除外，避免重复）
@@ -217,6 +227,7 @@ public partial class MiFocusNotification : UserControl
         LoadIcon();
         ApplyTheme();
         ApplyDensity();
+        ApplyTitleText();
     }
 
     private string? _mediaSignature;
@@ -549,6 +560,12 @@ public partial class MiFocusNotification : UserControl
         IconBackgroundBorder.Background = new SolidColorBrush(iconBg);
         CoverBorder.Background = new SolidColorBrush(iconBg);
 
+        // 外卖预计送达时间的高亮绿（手机端同款语义：时间用绿色从标题里跳出来）
+        Resources["DeliveryEtaBrush"] = new SolidColorBrush(dark
+            ? Color.FromRgb(0x3F, 0xD9, 0x7F)
+            : Color.FromRgb(0x0A, 0x9E, 0x52));
+        ApplyTitleText();
+
         AppNameText.Foreground = new SolidColorBrush(primary);
         TimeText.Foreground = new SolidColorBrush(secondary);
         TitleText.Foreground = new SolidColorBrush(primary);
@@ -704,9 +721,50 @@ public partial class MiFocusNotification : UserControl
         return bmp;
     }
 
+    /// <summary>
+    /// 外卖卡片的标题渲染：预计送达时间（HH:mm 或 N分钟）用绿色高亮，
+    /// 与手机端焦点通知同款语义；其余通知走纯文本。
+    /// 在换配色时重入（颜色画刷随主题实例替换），因此独立成方法而非写死在 LoadData。
+    /// </summary>
+    private void ApplyTitleText()
+    {
+        TitleText.Inlines.Clear();
+        string title = DisplayTitle;
+
+        if (Message.Category == "delivery")
+        {
+            // HH:mm 优先（预计18:34送达），退而高亮 N分钟（预计30分钟后送达）
+            var match = Regex.Match(title, @"^(.*?)(\d{1,2}:\d{2})(.*)$");
+            if (!match.Success) match = Regex.Match(title, @"^(.*?)(\d+分钟)(.*)$");
+            if (match.Success)
+            {
+                if (match.Groups[1].Value.Length > 0)
+                    TitleText.Inlines.Add(new Run(match.Groups[1].Value));
+                TitleText.Inlines.Add(new Run(match.Groups[2].Value)
+                {
+                    Foreground = (Brush)Resources["DeliveryEtaBrush"]
+                });
+                if (match.Groups[3].Value.Length > 0)
+                    TitleText.Inlines.Add(new Run(match.Groups[3].Value));
+                return;
+            }
+        }
+
+        TitleText.Text = title;
+    }
+
     private void BuildStageBar(int current, int total, string category = "delivery")
     {
         StageBar.Children.Clear();
+
+        // 外卖配送用手机同款的骑手进度条；取餐等其他类别保留圆点阶段条
+        if (category == "delivery")
+        {
+            BuildDeliveryRouteBar(current, total);
+            return;
+        }
+
+        StageBar.HorizontalAlignment = HorizontalAlignment.Left;
         int segments = total - 1;
         double lineWidth = total <= 6 ? 56 : 42;
 
@@ -745,6 +803,223 @@ public partial class MiFocusNotification : UserControl
             VerticalAlignment = VerticalAlignment.Center
         };
         StageBar.Children.Add(lastEllipse);
+    }
+
+    /// <summary>
+    /// 外卖配送的手机同款进度条：圆角轨道 + 主题色填充到骑手位置，
+    /// 🛵 骑手在填充前端、🏪 商家在起点、🏁 终点在右（current/total 来自安卓端 7 档映射）。
+    /// 宽度对齐卡片内容区（RootBorder 左右各 20 内边距），列宽用 star 比例精确落在比例点。
+    /// </summary>
+    private void BuildDeliveryRouteBar(int current, int total)
+    {
+        double fraction = total > 0 ? Math.Clamp((double)current / total, 0.0, 1.0) : 0;
+        double barWidth = Math.Max(140, (Width > 0 ? Width : AppSettings.Instance.CardWidth) - 40);
+
+        StageBar.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var grid = new Grid { Height = 24, Width = barWidth };
+
+        grid.Children.Add(new Border
+        {
+            Height = 8,
+            CornerRadius = new CornerRadius(4),
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = TrackDotBrush
+        });
+
+        var overlay = new Grid();
+        overlay.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(fraction * 100, GridUnitType.Star) });
+        overlay.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength((1 - fraction) * 100 + 0.001, GridUnitType.Star) });
+
+        var fill = new Border
+        {
+            Background = AccentDotBrush,
+            CornerRadius = new CornerRadius(4, 0, 0, 4),
+            Height = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(fill, 0);
+        overlay.Children.Add(fill);
+
+        var rider = new TextBlock
+        {
+            Text = "🛵",
+            FontSize = 18,
+            FontFamily = new FontFamily("Segoe UI Emoji"),
+            Foreground = Brushes.White, // 单色字形渲染时的可见色（彩色字体生效时忽略）
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 0, -13, 0)
+        };
+        Grid.SetColumn(rider, 0);
+        overlay.Children.Add(rider);
+
+        grid.Children.Add(overlay);
+
+        var store = new TextBlock
+        {
+            Text = "🏪",
+            FontSize = 13,
+            FontFamily = new FontFamily("Segoe UI Emoji"),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x86, 0x86, 0x86)),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(3, 0, 0, 0)
+        };
+        Grid.SetColumnSpan(store, 2);
+        grid.Children.Add(store);
+
+        var flag = new TextBlock
+        {
+            Text = "🏁",
+            FontSize = 13,
+            FontFamily = new FontFamily("Segoe UI Emoji"),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x86, 0x86, 0x86)),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 0, 3, 0)
+        };
+        Grid.SetColumnSpan(flag, 2);
+        grid.Children.Add(flag);
+
+        StageBar.Children.Add(grid);
+    }
+
+    // ---------- 配送卡连续进度（距离 / ETA 融合） ----------
+
+    private DispatcherTimer? _deliveryTickTimer;
+    /// <summary>最近一次通知给出的预计送达时刻（相对“N分钟”型会换算成绝对时刻）。</summary>
+    private DateTime? _deliveryEta;
+    /// <summary>该 ETA 首次出现时距离送达的分钟数，作为时间进度的分母。</summary>
+    private double? _etaInitialRemainMin;
+    /// <summary>本卡片首次见到的骑手剩余距离（公里），距离进度以此为基准。</summary>
+    private double? _distanceBaselineKm;
+    private int _lastDeliveryPercentShown = -1;
+
+    // 淘宝/美团/饿了么等文案里的剩余距离：距您1.2公里、距离您 500 米、0.8km
+    private static readonly Regex DeliveryDistanceKmRegex =
+        new(@"距[离您\s]*([0-9]+(?:\.[0-9]+)?)\s*(公里|千米|km)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex DeliveryDistancePlainKmRegex =
+        new(@"([0-9]+(?:\.[0-9]+)?)\s*(公里|千米|km)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex DeliveryDistanceMeterRegex =
+        new(@"距[离您\s]*([0-9]+(?:\.[0-9]+)?)\s*米", RegexOptions.Compiled);
+    private static readonly Regex DeliveryClockRegex = new(@"(\d{1,2}):(\d{2})", RegexOptions.Compiled);
+    private static readonly Regex DeliveryRemainMinutesRegex =
+        new(@"(?:(?:预计|还有)\s*(\d+)\s*分钟|(\d+)\s*分钟后)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// 配送卡的连续进度：安卓端 7 档阶段映射只作下限，通知文本里的剩余距离
+    /// （距您1.2公里）与预计送达时刻各自折算成百分比后取最大值——骑手越近、
+    /// 越接近 ETA，进度条越满，不再困在某一档上。15 秒本地走时让进度在两次
+    /// 推送之间也朝 ETA 推进（更新到达时以最新数据重算）。
+    /// </summary>
+    private void ApplyDeliveryProgress()
+    {
+        var p = Message.Progress;
+        if (p == null) return;
+
+        double percent = p.Total > 0 ? (double)p.Current / p.Total * 100 : 0;
+        string haystack = string.Join('\n', DisplayTitle, DisplayContent, DisplayHintText, p.Label);
+
+        double? remainKm = ExtractRemainingDistanceKm(haystack);
+        if (remainKm is { } km)
+        {
+            // 基准取见过的最远距离：骑手绕路变远时条只回退到阶段下限，不会按更远基准重算
+            _distanceBaselineKm = Math.Max(_distanceBaselineKm ?? km, km);
+            if (_distanceBaselineKm.Value > 0.05)
+                percent = Math.Max(percent, (1 - km / _distanceBaselineKm.Value) * 100);
+        }
+
+        DateTime? eta = ExtractEtaTime(haystack);
+        double? remainMin = ExtractRemainMinutes(haystack);
+        if (eta is { } absEta)
+        {
+            if (_deliveryEta != absEta)
+            {
+                // ETA 变化（延迟/提前）就重新起算；窗口至少半分钟防除零
+                _deliveryEta = absEta;
+                _etaInitialRemainMin = Math.Max(0.5, (absEta - DateTime.Now).TotalMinutes);
+            }
+        }
+        else if (remainMin is { } mins)
+        {
+            var abs = DateTime.Now.AddMinutes(mins);
+            if (_deliveryEta == null || Math.Abs((_deliveryEta.Value - abs).TotalMinutes) > 1.5)
+            {
+                _deliveryEta = abs;
+                _etaInitialRemainMin = mins;
+            }
+        }
+        if (_deliveryEta is { } etaTime && _etaInitialRemainMin is { } initMin)
+        {
+            double remain = (etaTime - DateTime.Now).TotalMinutes;
+            percent = Math.Max(percent, Math.Clamp(1 - remain / initMin, 0, 1) * 100);
+        }
+
+        percent = Math.Clamp(percent, 0, 100);
+        int shown = (int)Math.Round(percent);
+        if (shown != _lastDeliveryPercentShown)
+        {
+            _lastDeliveryPercentShown = shown;
+            ProgressPercentText.Text = $"{shown}%";
+            BuildStageBar(shown, 100, "delivery");
+        }
+        UpdateDeliveryTick();
+    }
+
+    private void UpdateDeliveryTick()
+    {
+        bool ticking = Message.Category == "delivery" && Message.Progress != null &&
+                       _deliveryEta.HasValue && _deliveryEta.Value > DateTime.Now;
+        if (ticking && _deliveryTickTimer == null)
+        {
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+            timer.Tick += (_, _) => ApplyDeliveryProgress();
+            timer.Start();
+            _deliveryTickTimer = timer;
+        }
+        else if (!ticking)
+        {
+            StopDeliveryTick();
+        }
+    }
+
+    private void StopDeliveryTick()
+    {
+        _deliveryTickTimer?.Stop();
+        _deliveryTickTimer = null;
+    }
+
+    /// <summary>从文案中提取骑手剩余距离（公里）；无距离信息返回 null。</summary>
+    private static double? ExtractRemainingDistanceKm(string text)
+    {
+        var m = DeliveryDistanceKmRegex.Match(text);
+        if (!m.Success) m = DeliveryDistancePlainKmRegex.Match(text);
+        if (m.Success && double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double km))
+            return km;
+        m = DeliveryDistanceMeterRegex.Match(text);
+        if (m.Success && double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double meters))
+            return meters / 1000;
+        return null;
+    }
+
+    /// <summary>提取绝对时刻型 ETA（预计18:34送达）；离谱偏差（&gt;12h）视为误匹配返回 null。</summary>
+    private static DateTime? ExtractEtaTime(string text)
+    {
+        var m = DeliveryClockRegex.Match(text);
+        if (!m.Success) return null;
+        int hour = int.Parse(m.Groups[1].Value), minute = int.Parse(m.Groups[2].Value);
+        if (hour > 23 || minute > 59) return null;
+        var cand = DateTime.Today.AddHours(hour).AddMinutes(minute);
+        return Math.Abs((cand - DateTime.Now).TotalHours) <= 12 ? cand : null;
+    }
+
+    /// <summary>提取相对分钟型 ETA（预计30分钟/10分钟后送达）；无则返回 null。</summary>
+    private static double? ExtractRemainMinutes(string text)
+    {
+        var m = DeliveryRemainMinutesRegex.Match(text);
+        if (!m.Success) return null;
+        string raw = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+        return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double mins) ? mins : null;
     }
 
     // 阶段圆点用色：填充=主色、未填充=轨道色。属性每次取值新建实例（重建频率低，可接受）
