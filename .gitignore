@@ -16,6 +16,10 @@ android/app/release/
 windows/src/**/bin/
 windows/src/**/obj/
 windows/dist/
+windows/dist-*/
+# 工具类 .NET 工程的构建产物（如 tools/FakePhone）
+tools/**/bin/
+tools/**/obj/
 windows/*.zip
 *.user
 *.suo
