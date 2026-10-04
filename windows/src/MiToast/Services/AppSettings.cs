@@ -41,6 +41,9 @@ public class AppSettings
     /// <summary>音乐通知常驻：媒体卡片排在最前，暂停播放后也不自动消失</summary>
     public bool MusicPersistent { get; set; } = true;
 
+    /// <summary>外卖通知常驻：外卖配送卡片置顶堆叠且不自动消失，需手动关闭</summary>
+    public bool DeliveryPersistent { get; set; } = false;
+
     /// <summary>勿扰模式：开启后通知仍保存到历史，但 PC 端不弹卡片（与托盘菜单实时同步）</summary>
     public bool DndEnabled { get; set; } = false;
 

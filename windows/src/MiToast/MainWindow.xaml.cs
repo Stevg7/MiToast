@@ -26,8 +26,9 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _idleTrimTimer;
     private readonly Dictionary<string, CancellationTokenSource> _dismissCts = new();
 
-    /// <summary>上一次 ApplySettings 时的音乐常驻开关，用于识别"刚取消常驻"这一次变化。</summary>
+    /// <summary>上一次 ApplySettings 时的音乐/外卖常驻开关，用于识别"刚取消常驻"这一次变化。</summary>
     private bool _musicPersistentApplied;
+    private bool _deliveryPersistentApplied;
 
     private WinForms.NotifyIcon? _trayIcon;
 
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _musicPersistentApplied = Settings.MusicPersistent;
+        _deliveryPersistentApplied = Settings.DeliveryPersistent;
         NetworkManager.Instance.NotificationReceived += OnNotificationReceived;
         NetworkManager.Instance.NotificationCleared += OnNotificationCleared;
         NetworkManager.Instance.StatusChanged += OnConnectionStatusChanged;
@@ -143,12 +145,14 @@ public partial class MainWindow : Window
         Width = workArea.Width;
         Height = workArea.Height;
 
-        // 刚取消音乐常驻：屏幕上正显示的媒体卡片直接移出屏幕。这里不能只"补建计时器"——
+        // 刚取消常驻：屏幕上正显示的对应卡片直接移出屏幕。这里不能只"补建计时器"——
         // 手机端的媒体通知在播放/暂停时都带 ongoing 标记（不可划掉），卡片会一直留在桌面上，
         // 直到手机把媒体通知划掉；暂停状态下这件事可能永远不会发生。
-        bool pinTurnedOff = _musicPersistentApplied && !Settings.MusicPersistent;
+        bool musicTurnedOff = _musicPersistentApplied && !Settings.MusicPersistent;
+        bool deliveryTurnedOff = _deliveryPersistentApplied && !Settings.DeliveryPersistent;
         _musicPersistentApplied = Settings.MusicPersistent;
-        List<string>? unpinnedMedia = pinTurnedOff ? new List<string>() : null;
+        _deliveryPersistentApplied = Settings.DeliveryPersistent;
+        List<string>? unpinnedMedia = musicTurnedOff || deliveryTurnedOff ? new List<string>() : null;
 
         foreach (var kvp in _activeByKey)
         {
@@ -156,15 +160,18 @@ public partial class MainWindow : Window
             kvp.Value.ApplyTheme();
             kvp.Value.ApplyDensity();
 
-            // 音乐常驻开关变化时同步自动消失计时器：
-            // 常驻媒体卡取消计时；其余卡片在缺失计时器时补建（已有倒计时不重置，
+            // 音乐/外卖常驻开关变化时同步自动消失计时器：
+            // 常驻卡片取消计时；其余卡片在缺失计时器时补建（已有倒计时不重置，
             // 否则改一次设置就等于给所有卡片续一次命）。
             if (IsPinnedMedia(kvp.Value.Message))
             {
                 CancelAutoDismiss(kvp.Key);
             }
-            else if (unpinnedMedia != null && kvp.Value.IsMediaCard)
+            else if (unpinnedMedia != null &&
+                     ((musicTurnedOff && kvp.Value.IsMediaCard) ||
+                      (deliveryTurnedOff && kvp.Value.Message.Category == "delivery")))
             {
+                // 只清理"刚被取消常驻"的那一类卡片，不波及 ongoing 等本来就不常驻的卡片
                 unpinnedMedia.Add(kvp.Key);
             }
             else if (NeedsAutoDismiss(kvp.Value.Message) && !_dismissCts.ContainsKey(kvp.Key))
@@ -232,9 +239,9 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(key)) return;
         Dispatcher.Invoke(() =>
         {
-            // 音乐常驻模式下，媒体卡片忽略手机端的清除（音乐 App 被杀/通知被划掉），
+            // 常驻模式下（音乐/媒体、外卖）卡片忽略手机端的清除，
             // 只有用户手动点卡片关闭按钮（DismissRequested → DismissByKey）才会移除。
-            // 未开启常驻时媒体卡片与其他通知一样，跟着手机端清除一起消失。
+            // 未开启常驻时卡片与其他通知一样，跟着手机端清除一起消失。
             if (_activeByKey.TryGetValue(key, out var card) && IsPinnedMedia(card.Message))
             {
                 return;
@@ -243,18 +250,23 @@ public partial class MainWindow : Window
         });
     }
 
-    /// <summary>音乐卡片是否需要常驻（设置开关开启且该通知携带媒体控件）。</summary>
+    /// <summary>卡片是否需要常驻：音乐常驻开 + 媒体卡，或外卖常驻开 + 外卖配送卡。</summary>
     private static bool IsPinnedMedia(NotificationMessage message)
-        => AppSettings.Instance.MusicPersistent && message.MediaActions is { Count: > 0 };
+    {
+        var settings = AppSettings.Instance;
+        if (settings.MusicPersistent && message.MediaActions is { Count: > 0 }) return true;
+        return settings.DeliveryPersistent && message.Category == "delivery";
+    }
 
     /// <summary>
-    /// 是否给卡片挂自动消失计时器。false 表示卡片常驻，只能手动关闭或等手机端清除通知。
+    /// 是否给卡片挂自动消失计时器。false 表示卡片常驻，只能手动关闭或等手机端清除。
+    /// 常驻判定：音乐/媒体卡按音乐常驻开关，外卖配送卡按外卖常驻开关；
     /// 非媒体通知沿用手机端的 ongoing 标记（下载、导航等持续通知不消失）；
     /// 媒体通知不常驻时不再看 ongoing——播放/暂停中的媒体通知在手机端一律不可划掉，
     /// 按 ongoing 处理会让"取消常驻"后的音乐卡片永久停留在屏幕上。
     /// </summary>
     private static bool NeedsAutoDismiss(NotificationMessage message)
-        => message.MediaActions is { Count: > 0 } ? !IsPinnedMedia(message) : !message.IsOngoing;
+        => !IsPinnedMedia(message) && (message.MediaActions is { Count: > 0 } || !message.IsOngoing);
 
     private void ShowOrUpdateNotification(NotificationMessage message)
     {
@@ -305,11 +317,11 @@ public partial class MainWindow : Window
         double sideLeft = IsRightSide ? 0 : margin;
         double sideRight = IsRightSide ? margin : 0;
 
-        // 音乐常驻时媒体卡片排在最靠近屏幕边缘的位置（OrderBy 稳定排序，保持组内插入顺序）
+        // 常驻开着的卡片（音乐/媒体或外卖）排在最靠近屏幕边缘的位置（OrderBy 稳定排序，保持组内插入顺序）
         IEnumerable<KeyValuePair<string, MiFocusNotification>> ordered = _activeByKey;
-        if (Settings.MusicPersistent)
+        if (Settings.MusicPersistent || Settings.DeliveryPersistent)
         {
-            ordered = _activeByKey.OrderBy(kvp => kvp.Value.IsMediaCard ? 0 : 1);
+            ordered = _activeByKey.OrderBy(kvp => IsPinnedMedia(kvp.Value.Message) ? 0 : 1);
         }
 
         double stack = 0;
@@ -908,6 +920,8 @@ public partial class MainWindow : Window
             darkItem.IsChecked = Settings.DarkMode;
         if (FindMenuItem(menu, "musicpin") is { } pinItem)
             pinItem.IsChecked = Settings.MusicPersistent;
+        if (FindMenuItem(menu, "deliverypin") is { } deliveryPinItem)
+            deliveryPinItem.IsChecked = Settings.DeliveryPersistent;
         if (FindMenuItem(menu, "dnd") is { } dndItem)
             dndItem.IsChecked = Settings.DndEnabled;
         if (FindMenuItem(menu, "status") is { } statusItem)
@@ -965,6 +979,15 @@ public partial class MainWindow : Window
         if (sender is MenuItem mi)
         {
             Settings.MusicPersistent = mi.IsChecked;
+            Settings.Save();
+        }
+    }
+
+    private void TrayDeliveryPin_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem mi)
+        {
+            Settings.DeliveryPersistent = mi.IsChecked;
             Settings.Save();
         }
     }

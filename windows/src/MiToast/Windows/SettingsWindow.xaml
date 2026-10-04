@@ -274,7 +274,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 音乐 -->
+                <!-- 常驻：音乐/媒体与外卖各自独立开关 -->
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <TextBlock Text="音乐" Style="{StaticResource SectionTitle}"/>
@@ -284,8 +284,8 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="音乐通知常驻" Style="{StaticResource ItemLabel}"/>
-                                <TextBlock Text="开启后始终置顶、不自动消失；关闭后约 9 秒消失" Style="{StaticResource ItemHint}"/>
+                                <TextBlock Text="常驻通知" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock Text="音乐等媒体卡片置顶且不自动消失；关闭后约 9 秒消失" Style="{StaticResource ItemHint}"/>
                             </StackPanel>
                             <CheckBox x:Name="MusicPersistentCheck"
                                       Grid.Column="1"
@@ -293,6 +293,21 @@
                                       IsChecked="True"
                                       Checked="MusicPersistentCheck_Toggled"
                                       Unchecked="MusicPersistentCheck_Toggled"/>
+                        </Grid>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="外卖通知常驻" Style="{StaticResource ItemLabel}"/>
+                                <TextBlock Text="外卖配送卡片置顶堆叠且不自动消失，需手动关闭；常驻期间不跟随手机端清除" Style="{StaticResource ItemHint}"/>
+                            </StackPanel>
+                            <CheckBox x:Name="DeliveryPersistentCheck"
+                                      Grid.Column="1"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      Checked="DeliveryPersistentCheck_Toggled"
+                                      Unchecked="DeliveryPersistentCheck_Toggled"/>
                         </Grid>
                     </StackPanel>
                 </Border>

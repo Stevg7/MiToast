@@ -51,6 +51,7 @@ public partial class SettingsWindow : Window
         DensitySlider.Value = settings.CardDensity * 100;
         DarkModeCheck.IsChecked = settings.DarkMode;
         MusicPersistentCheck.IsChecked = settings.MusicPersistent;
+        DeliveryPersistentCheck.IsChecked = settings.DeliveryPersistent;
         DndCheck.IsChecked = settings.DndEnabled;
         DndSyncCheck.IsChecked = settings.DndSyncPhone;
         HistoryCheck.IsChecked = settings.HistoryEnabled;
@@ -121,6 +122,7 @@ public partial class SettingsWindow : Window
             DndSyncCheck.IsChecked = AppSettings.Instance.DndSyncPhone;
             HistoryCheck.IsChecked = AppSettings.Instance.HistoryEnabled;
             McpLanCheck.IsChecked = AppSettings.Instance.McpLanEnabled;
+            DeliveryPersistentCheck.IsChecked = AppSettings.Instance.DeliveryPersistent;
             SweepCheck.IsChecked = AppSettings.Instance.SubnetSweepEnabled;
             ApplyTheme(AppSettings.Instance.DarkMode);
             _loading = false;
@@ -261,6 +263,14 @@ public partial class SettingsWindow : Window
     {
         if (_loading) return;
         AppSettings.Instance.MusicPersistent = MusicPersistentCheck.IsChecked == true;
+        AppSettings.Instance.Save();
+    }
+
+    /// <summary>外卖通知常驻开关：立即应用并持久化。</summary>
+    private void DeliveryPersistentCheck_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        AppSettings.Instance.DeliveryPersistent = DeliveryPersistentCheck.IsChecked == true;
         AppSettings.Instance.Save();
     }
 

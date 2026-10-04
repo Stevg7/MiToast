@@ -107,7 +107,8 @@
             <MenuItem Header="历史通知..." Click="TrayHistory_Click"/>
             <Separator/>
             <MenuItem Tag="dark" Header="深色模式" IsCheckable="True" Click="TrayDark_Click"/>
-            <MenuItem Tag="musicpin" Header="音乐通知常驻" IsCheckable="True" Click="TrayMusicPin_Click"/>
+            <MenuItem Tag="musicpin" Header="常驻通知" IsCheckable="True" Click="TrayMusicPin_Click"/>
+            <MenuItem Tag="deliverypin" Header="外卖通知常驻" IsCheckable="True" Click="TrayDeliveryPin_Click"/>
             <MenuItem Tag="dnd" Header="勿扰模式（PC 端静默）" IsCheckable="True" Click="TrayDnd_Click"/>
             <Separator/>
             <MenuItem Header="退出 MiToast" Click="TrayExit_Click"/>
